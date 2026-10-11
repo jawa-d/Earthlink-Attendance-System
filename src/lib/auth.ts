@@ -29,6 +29,11 @@ export async function currentAdmin() {
     ? session.admin
     : null;
 }
+export async function currentSessionId() {
+  const token = (await cookies()).get(COOKIE)?.value;
+  if (!token) throw new HttpError(401, "يرجى تسجيل الدخول");
+  return tokenHash(token);
+}
 export async function authorize(access: keyof typeof permissions = "read") {
   const admin = await currentAdmin();
   if (!admin) throw new HttpError(401, "يرجى تسجيل الدخول");

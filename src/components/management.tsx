@@ -13,6 +13,7 @@ import { RecordsTable, type Row } from "./records-table";
 import { DepartmentEditor, type Department } from "./department-editor";
 import { LeaderEditor, type TeamLeader } from "./leader-editor";
 import type { LeaderGroup } from "@/lib/leader-report";
+import { AttendancePermanentDelete } from "./attendance-permanent-delete";
 type List = {
   rows: Row[];
   total: number;
@@ -59,6 +60,7 @@ export function Management({
   const [end, setEnd] = useState(businessDate());
   const [page, setPage] = useState(1);
   const [deleted, setDeleted] = useState(false);
+  const [permanentSelection, setPermanentSelection] = useState<{ ids: string[] } | { filters: Record<string, string> } | null>(null);
   const [editing, setEditing] = useState<Row | null | undefined>(undefined);
   const [confirm, setConfirm] = useState<{ row: Row; restore: boolean } | null>(
     null,
@@ -174,6 +176,13 @@ export function Management({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {kind === "attendance" && role === "SUPER_ADMIN" && status !== "UNREGISTERED" && (
+            <Button variant="destructive" disabled={query.isPending || query.isError || !query.data?.total} onClick={() => {
+              const filters = Object.fromEntries(params);
+              delete filters.page;
+              setPermanentSelection({ filters });
+            }}>حذف نهائي للسجلات المطابقة</Button>
+          )}
           {kind !== "audit-logs" && (
             <>
               <a href={exportUrl("xlsx")}>
@@ -449,6 +458,7 @@ export function Management({
           <RecordsTable
             rows={query.data?.rows || []}
             kind={kind === "reports" ? "attendance" : kind}
+            onPermanentlyDelete={kind === "attendance" && role === "SUPER_ADMIN" ? r => setPermanentSelection({ ids: [r.id] }) : undefined}
             onView={(r) => setView(r)}
             onEdit={writable ? (r) => open(r) : undefined}
             onDelete={
@@ -492,6 +502,11 @@ export function Management({
           </div>
         </div>
       </section>
+      {permanentSelection && <AttendancePermanentDelete selection={permanentSelection} onClose={() => setPermanentSelection(null)} onDeleted={async () => {
+        toast.success("تم الحذف النهائي وحفظ سجل العملية");
+        setPage(1);
+        await refresh();
+      }} />}
       <Dialog
         open={editing !== undefined}
         onOpenChange={(v) => {

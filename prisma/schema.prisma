@@ -37,6 +37,7 @@ model AdminUser {
  sessions Session[]
  records AttendanceRecord[]
  auditLogs AuditLog[]
+ deletionSnapshots AttendanceDeletionSnapshot[]
 }
 model Session {
  id String @id
@@ -146,6 +147,27 @@ model SystemSetting {
  key String @unique
  value String
  updatedAt DateTime @updatedAt
+}
+// Durable, session-bound deletion consent. Attendance IDs have no foreign key:
+// this evidence must survive permanent deletion of the original records.
+model AttendanceDeletionSnapshot {
+ id String @id @default(uuid()) @db.Uuid
+ adminId String @db.Uuid
+ admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+ sessionId String
+ selection Json
+ records Json
+ fingerprint String
+ recordCount Int
+ codeHash String
+ createdAt DateTime @default(now())
+ expiresAt DateTime
+ exportedAt DateTime?
+ fileHash String?
+ reauthenticatedAt DateTime?
+ codeVerifiedAt DateTime?
+ consumedAt DateTime?
+ @@index([adminId, expiresAt])
 }
 model RateLimit {
  key String @id

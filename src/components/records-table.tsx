@@ -39,6 +39,7 @@ export function RecordsTable({
   onEdit,
   onDelete,
   onRestore,
+  onPermanentlyDelete,
   onView,
 }: {
   rows: Row[];
@@ -46,6 +47,7 @@ export function RecordsTable({
   onEdit?: (r: Row) => void;
   onDelete?: (r: Row) => void;
   onRestore?: (r: Row) => void;
+  onPermanentlyDelete?: (r: Row) => void;
   onView?: (r: Row) => void;
 }) {
   return (
@@ -208,6 +210,9 @@ export function RecordsTable({
                           >
                             استعادة
                           </button>
+                        )}
+                        {onPermanentlyDelete && r.status !== "UNREGISTERED" && (
+                          <button className="text-[10px] text-red-700" onClick={() => onPermanentlyDelete(r)}>حذف نهائي</button>
                         )}
                       </div>
                     </td>

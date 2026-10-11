@@ -1,4 +1,5 @@
 import { businessDate } from "./validation";
+import { summarizeAttendanceDay } from "./attendance-summary";
 export type Assignment = {
   teamLeaderId: string | null;
   leaderName: string | null;
@@ -49,6 +50,9 @@ export type LeaderReportRow = {
   attendanceDate: Date;
   status: string;
   checkInAt: Date | null;
+  firstCheckInAt: Date | null;
+  lastCheckInAt: Date | null;
+  eventCount: number;
   registrationMethod: string;
   teamLeaderId: string | null;
   teamLeaderName: string;
@@ -95,12 +99,11 @@ export function buildLeaderReport(
     )
       group(l.id, l.fullName);
   for (const employee of employees) {
-    const recorded = new Map(
-      employee.attendance.map((r) => [
-        r.attendanceDate.toISOString().slice(0, 10),
-        r,
-      ]),
-    );
+    const recorded = new Map<string, ReportEmployee["attendance"]>();
+    for (const record of employee.attendance) {
+      const key = record.attendanceDate.toISOString().slice(0, 10);
+      recorded.set(key, [...(recorded.get(key) || []), record]);
+    }
     for (
       let date = start;
       date <= end;
@@ -109,7 +112,8 @@ export function buildLeaderReport(
       const day = date.toISOString().slice(0, 10);
       if (businessDate(employee.createdAt) > day) continue;
       const assignment = assignmentOnDate(employee.assignments, date);
-      const record = recorded.get(day);
+      const daily = summarizeAttendanceDay(recorded.get(day) || []);
+      const record = daily.representative;
       const departmentId = assignment?.departmentId || employee.departmentId;
       const teamLeaderId = assignment?.teamLeaderId || null;
       if (filters.department && departmentId !== filters.department) continue;
@@ -132,17 +136,12 @@ export function buildLeaderReport(
         assignment?.leaderName || "بدون ليدر / تاريخ غير متوفر";
       const summary = group(teamLeaderId, leaderName);
       const status =
-        record?.status || (historyUnknown ? "HISTORY_UNKNOWN" : "UNREGISTERED");
+        daily.status || (historyUnknown ? "HISTORY_UNKNOWN" : "UNREGISTERED");
       if (historyUnknown) summary.unknownEmployeeDays++;
       if (eligible) {
         summary.employeeDays++;
         distinct.get(summary.id)!.add(employee.id);
-        if (
-          record &&
-          ["PRESENT", "LATE"].includes(record.status) &&
-          record.checkInAt
-        )
-          summary.present++;
+        if (daily.present) summary.present++;
         else if (record?.status === "EXCUSED") summary.excused++;
         else summary.absent++;
       }
@@ -160,7 +159,10 @@ export function buildLeaderReport(
         },
         attendanceDate: date,
         status,
-        checkInAt: record?.checkInAt || null,
+        checkInAt: daily.firstCheckInAt,
+        firstCheckInAt: daily.firstCheckInAt,
+        lastCheckInAt: daily.lastCheckInAt,
+        eventCount: daily.eventCount,
         registrationMethod: record?.registrationMethod || "—",
         teamLeaderId,
         teamLeaderName: leaderName,

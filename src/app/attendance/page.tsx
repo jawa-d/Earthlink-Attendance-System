@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { QrCode, ArrowLeft, ShieldCheck } from "lucide-react";
 import { corporateEmail } from "@/lib/validation";
-import { api } from "@/lib/client";
+import { api, ApiError } from "@/lib/client";
+import { useAttendanceCooldown } from "@/components/use-attendance-cooldown";
+import { AttendanceCountdown } from "@/components/attendance-countdown";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 export default function Attendance() {
@@ -15,6 +17,7 @@ export default function Attendance() {
     formState: { isSubmitting },
   } = useForm<{ email: string }>();
   const [error, setError] = useState("");
+  const cooldown = useAttendanceCooldown();
   return (
     <main className="flex flex-1 items-center justify-center p-5">
       <div className="w-full max-w-md">
@@ -35,6 +38,7 @@ export default function Attendance() {
           </p>
           <form
             onSubmit={handleSubmit(async (values) => {
+              if (cooldown.blocked) return;
               setError("");
               const parsed = corporateEmail.safeParse(values.email);
               if (!parsed.success) {
@@ -54,7 +58,17 @@ export default function Attendance() {
                 );
                 router.push("/attendance/success");
               } catch (e) {
-                setError((e as Error).message);
+                if (
+                  e instanceof ApiError &&
+                  e.data.code === "ATTENDANCE_COOLDOWN" &&
+                  typeof e.data.nextAllowedAt === "string" &&
+                  typeof e.data.serverNow === "string"
+                )
+                  cooldown.acceptCooldown({
+                    nextAllowedAt: e.data.nextAllowedAt,
+                    serverNow: e.data.serverNow,
+                  });
+                else setError((e as Error).message);
               }
             })}
           >
@@ -74,11 +88,59 @@ export default function Attendance() {
                 {error}
               </p>
             )}
-            <Button disabled={isSubmitting} className="mt-5 w-full">
+            <Button
+              disabled={isSubmitting || cooldown.blocked}
+              className="mt-5 w-full"
+            >
               {isSubmitting ? "جاري التسجيل…" : "تسجيل الحضور"}
               <ArrowLeft size={17} />
             </Button>
           </form>
+          {cooldown.status === "loading" && (
+            <p
+              role="status"
+              className="mt-4 text-center text-xs text-slate-500"
+            >
+              جارٍ التحقق من حالة التسجيل…
+            </p>
+          )}
+          {cooldown.status === "cooldown" && cooldown.times && (
+            <AttendanceCountdown
+              remaining={cooldown.remaining}
+              nextAllowedAt={cooldown.times.nextAllowedAt}
+            />
+          )}
+          {cooldown.status === "error" && (
+            <div className="mt-4 space-y-3">
+              <p role="alert" className="text-xs text-red-600">
+                تعذر التحقق من فترة الانتظار. تحقق من الاتصال وأعد المحاولة.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void cooldown.refresh()}
+              >
+                إعادة التحقق
+              </Button>
+            </div>
+          )}
+          {cooldown.status === "unavailable" && (
+            <p role="alert" className="mt-4 text-xs text-red-600">
+              تعذر تسجيل الحضور. يرجى التواصل مع مسؤول القسم.
+            </p>
+          )}
+          {cooldown.status !== "ready" && cooldown.status !== "loading" && (
+            <button
+              type="button"
+              className="mt-4 text-xs text-blue-600"
+              onClick={() => {
+                setError("");
+                void cooldown.clear();
+              }}
+            >
+              استخدام بريد موظف آخر
+            </button>
+          )}
           <p className="muted mt-6 flex items-center justify-center gap-2 text-xs">
             <ShieldCheck size={15} /> متاح لموظفي القسم المسجلين فقط
           </p>

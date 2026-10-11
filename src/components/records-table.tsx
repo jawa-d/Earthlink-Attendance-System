@@ -17,6 +17,9 @@ export type Row = {
   employee?: Row;
   attendanceDate?: string;
   checkInAt?: string | null;
+  firstCheckInAt?: string | null;
+  lastCheckInAt?: string | null;
+  eventCount?: number;
   deletedAt?: string | null;
   registrationMethod?: string;
   reason?: string;
@@ -68,7 +71,8 @@ export function RecordsTable({
                     "القسم",
                     "الليدر المسؤول",
                     "التاريخ",
-                    "وقت الحضور",
+                    kind === "reports" ? "أول حضور" : "وقت الحضور",
+                    ...(kind === "reports" ? ["آخر حضور", "عدد الأحداث"] : []),
                     "الحالة",
                     "الطريقة",
                     "الإجراءات",
@@ -137,6 +141,19 @@ export function RecordsTable({
                               )
                             : "—"}
                         </td>
+                        {kind === "reports" && (
+                          <>
+                            <td>
+                              {r.lastCheckInAt
+                                ? new Date(r.lastCheckInAt).toLocaleTimeString(
+                                    "en-GB",
+                                    { timeZone: "Asia/Baghdad" },
+                                  )
+                                : "—"}
+                            </td>
+                            <td>{r.eventCount ?? 0}</td>
+                          </>
+                        )}
                       </>
                     )}
                     <td>

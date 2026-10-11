@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { authorize } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { departmentFields } from "@/lib/departments";
+import { summarizeAttendanceDay } from "@/lib/attendance-summary";
 import {
   lockAssignments,
   validateLeaderAssignment,
@@ -249,42 +250,52 @@ export async function GET(req: Request, ctx: Context) {
       const activeRows = rows.filter(
         (r) => r.employee.status === "ACTIVE" && !r.employee.deletedAt,
       );
+      const uniqueDays = [
+        ...new Set(activeRows.map((row) => row.employeeId)),
+      ].map((id) =>
+        summarizeAttendanceDay(
+          activeRows.filter((row) => row.employeeId === id),
+        ),
+      );
       const counts = Object.fromEntries(
         ["PRESENT", "LATE", "ABSENT", "EXCUSED"].map((s) => [
           s,
-          activeRows.filter((r) => r.status === s).length,
+          uniqueDays.filter((day) => day.status === s).length,
         ]),
       );
-      const trends = await db.attendanceRecord.groupBy({
-        by: ["attendanceDate"],
+      const trends = await db.attendanceRecord.findMany({
+        distinct: ["employeeId", "attendanceDate"],
+        select: { attendanceDate: true, employeeId: true },
         where: {
           deletedAt: null,
+          status: { in: ["PRESENT", "LATE"] },
+          checkInAt: { not: null },
           attendanceDate: {
             gte: new Date(today.getTime() - 29 * 86400000),
             lte: today,
           },
         },
-        _count: true,
         orderBy: { attendanceDate: "asc" },
       });
-      const yearly = await db.attendanceRecord.groupBy({
-        by: ["attendanceDate"],
+      const yearly = await db.attendanceRecord.findMany({
+        distinct: ["employeeId", "attendanceDate"],
+        select: { attendanceDate: true, employeeId: true },
         where: {
           deletedAt: null,
+          status: { in: ["PRESENT", "LATE"] },
+          checkInAt: { not: null },
           attendanceDate: {
             gte: new Date(`${today.getUTCFullYear()}-01-01T00:00:00Z`),
             lte: today,
           },
         },
-        _count: true,
       });
       const monthly = Array.from(
         { length: today.getUTCMonth() + 1 },
         (_, month) => ({
           month: String(month + 1).padStart(2, "0"),
-          total: yearly
-            .filter((r) => r.attendanceDate.getUTCMonth() === month)
-            .reduce((sum, r) => sum + r._count, 0),
+          total: yearly.filter((r) => r.attendanceDate.getUTCMonth() === month)
+            .length,
         }),
       );
       const departments = await db.department.findMany({
@@ -299,18 +310,26 @@ export async function GET(req: Request, ctx: Context) {
       });
       return Response.json({
         employees,
-        registered: activeRows.filter((r) => r.checkInAt).length,
-        unregistered: employees - activeRows.length,
+        registered: uniqueDays.filter((day) => day.firstCheckInAt).length,
+        unregistered: Math.max(0, employees - uniqueDays.length),
         counts,
         monthly,
         rows: rows.slice(0, 25),
-        trends: trends.map((r) => ({
-          date: r.attendanceDate.toISOString().slice(5, 10),
-          total: r._count,
+        trends: [
+          ...new Set(
+            trends.map((row) => row.attendanceDate.toISOString().slice(0, 10)),
+          ),
+        ].map((day) => ({
+          date: day.slice(5, 10),
+          total: trends.filter(
+            (row) => row.attendanceDate.toISOString().slice(0, 10) === day,
+          ).length,
         })),
         departments: departments.map((d) => ({
           name: d.name,
-          total: d.employees.filter((e) => e.attendance.length > 0).length,
+          total: d.employees.filter(
+            (e) => summarizeAttendanceDay(e.attendance).present,
+          ).length,
         })),
       });
     }

@@ -1,0 +1,43 @@
+# Rolling attendance cooldown
+
+Status: implemented locally. Migration `202610110005_attendance_cooldown` is prepared but **not applied to production**. No production schema/data changes, push or deployment were performed for this feature.
+
+## Rule and server enforcement
+
+The public QR registration service allows another registration exactly 36,000,000 milliseconds after the previous successful self-registration. Equality is allowed. Midnight in Asia/Baghdad does not reset the cooldown. A second event on the same Baghdad date is allowed after ten hours.
+
+The transaction locks the Employee row before checking status and last registration. It samples server time after acquiring the lock, writes the event and durable Employee cooldown timestamp in the same transaction, and commits before returning success. Concurrent requests for the same employee serialize on that row. Public requests supply only email; submitted timestamps cannot override server time. The optional internal clock argument exists for controlled tests and is never populated from an HTTP request.
+
+`AttendanceRecord.registeredAt` records the server-generated QR instant separately from editable check-in fields. `Employee.lastSuccessfulAttendanceAt` retains the latest successful registration even if an administrator soft-deletes, corrects or changes the employee association of a record. Admin employee validation does not allow writing this field, and attendance correction APIs do not allow writing registeredAt. Future QR registrations update both fields transactionally. Manual ADMIN records are administrative entries that can be backdated; they neither create nor clear the self-registration cooldown. Existing correction, restore, permission and audit flows remain intact. With daily uniqueness removed, authorized manual records and restored records may coexist on the same day; every event is retained rather than silently merged or deleted.
+
+The legacy fallback reads original QR timestamps on events still lacking registeredAt, including soft-deleted events. This covers old application instances writing during the migration/deployment overlap. For existing QR records, the migration copies originalCheckInAt, falling back to server-created createdAt, into registeredAt and backfills each Employee's latest instant. Earlier manual history remains unchanged. Historical employee transfers that occurred before this timestamp strategy cannot be reconstructed beyond the records' existing employee association.
+
+409 cooldown responses contain only `error`, `code: ATTENDANCE_COOLDOWN`, `nextAllowedAt` and `serverNow`. No employee identity or history is returned in the conflict payload. Origin checks, corporate-email validation and the existing registration rate limits remain in place.
+
+## Receipt-scoped timer revalidation
+
+Successful registration and cooldown conflicts issue an AES-256-GCM encrypted, authenticated, purpose-separated receipt using the existing AUTH_SECRET. It contains only the employee UUID and expiry, is valid for 48 hours, and is stored in an HttpOnly, Secure-in-production, SameSite=Strict cookie scoped to `/api/attendance`. No employee identifier or token is exposed to frontend JavaScript. Rotation of AUTH_SECRET invalidates existing receipts; server-side registration enforcement remains effective.
+
+`POST /api/attendance/cooldown` accepts no employee lookup identifier. It ignores submitted email/employee fields and resolves only the verified receipt's employee. With no valid receipt, it returns `unknown` without querying an employee. A receipt-scoped rate limit protects valid revalidation requests. Replies are private/no-store and return timing/state only. An unavailable employee receives a generic state without identifying information. `DELETE` clears this browser's receipt using the same Origin check; it does not change database records or bypass server cooldown. This enables shared terminals to enter another employee's email.
+
+The countdown uses the server nextAllowedAt/serverNow pair and elapsed `performance.now()` time, so a skewed or changed client wall clock cannot fast-forward submission. It updates every second, cancels timers and requests on unmount, restores from the receipt after refresh, and revalidates on tab focus/visibility return. At zero it remains disabled until the server replies. Network failure blocks submission and offers a retry; no attendance is submitted automatically. Older revalidation replies cannot supersede a newer registration conflict. The final registration POST always rechecks the database, including when a receipt is missing, cleared or expired. Frontend state is not a security boundary.
+
+Privacy limitation: existing email-only attendance permits impersonation by someone who knows an employee's email. Cooldown and encrypted receipts do not prove identity or physical presence. The conflict timing required by this feature can still be obtained by attempting registration for a known email; this implementation does not add a separate anonymous arbitrary-status lookup API.
+
+## Daily reporting and exports
+
+The attendance-management list retains all events individually for review and correction. Leader reports produce one employee-day detail row, with first/latest effective check-in times and event count, while preserving historical department/leader attribution. Multiple qualifying PRESENT/LATE events count as one present employee-day; PRESENT takes precedence over LATE. When no qualifying present event exists, EXCUSED is separate and absence/missing attendance follows the existing eligibility rules. Unknown pre-baseline employment periods remain excluded from inferred absence.
+
+Dashboard daily counts group active employees once. Trend/month queries use distinct employee/date pairs with qualifying presence. Department totals also count employees once. A multi-day total is employee-days, not check-in events. Grouped Excel/PDF exports include earliest/latest times and number of events; raw Excel keeps every event and explicitly separates event count, employee-day count and unique employee count. Timestamp display uses Asia/Baghdad. Administrative corrections affect reported effective times/statuses but never rewrite registeredAt or shorten the cooldown.
+
+## Safe rollout — explicit approval required
+
+1. Review the migration and source, and arrange a restore point/backup through the existing Neon project workflow. Do not create another project, reset the database or use db push.
+2. Obtain explicit approval before executing `npm run db:migrate` against production. The migration adds two nullable timestamps, backfills QR timestamps without deleting attendance, adds a timestamp index and removes the obsolete partial daily unique index inside a transaction. Older application instances still enforce their old daily restriction until replaced; the legacy fallback protects the deployment overlap.
+3. After approval and migration, run `npm run db:check -- --require-schema` and read-only migration/index checks. The verification script now requires the rolling timestamp index. Preserve existing employee, administrator, department and attendance record counts.
+4. Obtain approval before GitHub push or Vercel deployment. Apply the migration before releasing this source version; deploying first would reference missing columns. Existing environment variables suffice, including a strong AUTH_SECRET. No new production permissions are required.
+5. Verify the flow on an approved isolated, migrated test database first: registration, immediate conflict, same-day ten-hour boundary, concurrent attempts, receipt refresh, reports, exports and manual corrections. Authenticated/live production test records require separate authorization; do not infer successful browser checks from a build.
+
+The PostgreSQL integration suite refuses an application-database endpoint and requires a separately configured TEST_DATABASE_URL. It is skipped when no isolated database is supplied; unit tests simulate lock serialization and do not substitute for a live PostgreSQL concurrency check. Integration cleanup deletes only records created by that isolated test run.
+
+Local verification on 2026-10-11: 115 automated tests passed; one isolated PostgreSQL integration test was skipped. TypeScript, ESLint, Prisma schema validation and the production build passed. Offline Prisma schema diff confirmed the two nullable timestamp additions and supporting index. The additional SQL explicitly replaces the historical daily unique index and backfills metadata without deleting attendance. No production migration or browser session was used for this verification.

@@ -85,13 +85,12 @@ async function main() {
         else {
           const indexes = await client.$queryRaw<
             { indexdef: string }[]
-          >`SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='AttendanceRecord_active_employee_date'`;
+          >`SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='AttendanceRecord_employeeId_registeredAt_idx'`;
           const activeIndex =
             indexes.length === 1 &&
-            indexes[0].indexdef.includes("UNIQUE") &&
-            indexes[0].indexdef.includes("deletedAt");
+            indexes[0].indexdef.includes("registeredAt");
           console.log(
-            `Active daily attendance unique index: ${activeIndex ? "present" : "missing"}.`,
+            `Rolling attendance timestamp index: ${activeIndex ? "present" : "missing (cooldown migration pending)"}.`,
           );
           if (process.argv.includes("--require-schema") && !activeIndex)
             process.exitCode = 1;

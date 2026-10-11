@@ -111,7 +111,7 @@ export function Dashboard({ preview = false }: { preview?: boolean }) {
             <div>
               <h2 className="font-semibold">اتجاه الحضور</h2>
               <p className="muted mt-2 text-xs">
-                إجمالي السجلات اليومية خلال آخر 30 يوماً
+                عدد الموظفين الحاضرين يومياً خلال آخر 30 يوماً
               </p>
             </div>
             <span className="badge">آخر 30 يوم</span>

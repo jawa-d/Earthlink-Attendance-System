@@ -12,6 +12,9 @@ export const leaderDetailHeaders = [
   "الحالة",
   "الوقت",
   "التغطية التاريخية",
+  "أول حضور",
+  "آخر حضور",
+  "عدد الأحداث",
 ];
 export function leaderDetailRows(rows: LeaderReportRow[]) {
   return rows.map((r) => [
@@ -29,6 +32,13 @@ export function leaderDetailRows(rows: LeaderReportRow[]) {
       : r.eligible
         ? "فعال في التاريخ"
         : "غير فعال في التاريخ",
+    r.firstCheckInAt?.toLocaleTimeString("en-GB", {
+      timeZone: "Asia/Baghdad",
+    }) || "—",
+    r.lastCheckInAt?.toLocaleTimeString("en-GB", {
+      timeZone: "Asia/Baghdad",
+    }) || "—",
+    String(r.eventCount),
   ]);
 }
 export async function exportLeaderReport(
@@ -51,6 +61,9 @@ export async function exportLeaderReport(
         `حضور ${g.present} / غياب ${g.absent} / بعذر ${g.excused}`,
         `${g.percentage}%`,
         `أيام موظفين ${g.employeeDays}; مجهولة ${g.unknownEmployeeDays}`,
+        "",
+        "",
+        "",
       ],
       ...leaderDetailRows(
         report.rows.filter((r) => (r.teamLeaderId || "unassigned") === g.id),

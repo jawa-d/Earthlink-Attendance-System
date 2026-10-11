@@ -35,9 +35,28 @@ export async function spreadsheet(rows: (string | number)[][]) {
   };
   sheet.autoFilter = { from: "A1", to: "H1" };
   const summary = book.addWorksheet("الملخص");
-  summary.addRow(["إجمالي السجلات", rows.length]);
+  summary.addRow(["إجمالي أحداث الحضور", rows.length]);
+  const days = new Map<string, typeof rows>();
+  rows.forEach((row) => {
+    const key = JSON.stringify([row[0], row[4]]);
+    days.set(key, [...(days.get(key) || []), row]);
+  });
+  summary.addRow(["أيام موظفين فريدة", days.size]);
+  summary.addRow([
+    "موظفون فريدون خلال الفترة",
+    new Set(rows.map((row) => row[0])).size,
+  ]);
+  const priority = ["PRESENT", "LATE", "EXCUSED", "ABSENT", "UNREGISTERED"];
+  const dailyStatuses = [...days.values()].map((events) =>
+    priority
+      .map((status) => statusNames[status])
+      .find((label) => events.some((row) => row[6] === label)),
+  );
   Object.entries(statusNames).forEach(([, label]) =>
-    summary.addRow([label, rows.filter((r) => r[6] === label).length]),
+    summary.addRow([
+      label,
+      dailyStatuses.filter((status) => status === label).length,
+    ]),
   );
   return Buffer.from(await book.xlsx.writeBuffer());
 }

@@ -1,6 +1,6 @@
 # Team leader management
 
-This change requires the additive migration `202610110004_team_leaders`. It has **not** been applied to the production Neon database as part of implementation. No production records, credentials or permissions were changed.
+This change requires the additive migration `202610110004_team_leaders`. It was applied to the existing production Neon database on 2026-10-11 after explicit user approval. Existing employee, attendance, administrator and department counts were unchanged. The migration added the nullable leader relation and two tables, created two initial assignment snapshots, and verified the one-open-interval unique index. No credentials or production permissions were changed, and no reset, db push or record deletion was used.
 
 ## Administration
 
@@ -37,3 +37,5 @@ Employees moved between leaders or departments remain attributed to their dated 
 5. Verify real ADMIN/SUPER_ADMIN leader creation, a controlled employee assignment, VIEWER read-only access, grouped date-based reports and exports after the approved migration/deployment. These checks require an approved isolated database/test account or separately approved production test records.
 
 Local automated tests use synthetic fixtures and mocked database calls. They cover server validation, role gates, CRUD/deactivation/reassignment, employee API integration, Baghdad/history boundaries, UI filtering and inline creation, report calculations, and XLSX/PDF generation. These tests do not prove that the new migration has executed on Neon. The database integration suite remains skipped without an explicitly configured isolated test database; it must never be pointed at production for this verification.
+
+Post-migration verification on 2026-10-11: pooled and direct connections succeeded; all 10 required tables and the active daily attendance unique index were present. Read-only application queries for employee/department/leader/assignment/attendance relations, grouped leader reports and dashboard aggregates succeeded against the existing Neon database. TypeScript, ESLint and the production build passed; 91 automated tests passed and the isolated database integration test remained skipped. No new team leaders or employee assignments were invented; administrators can configure leaders through the dashboard. Authenticated production browser verification remains a separate check.

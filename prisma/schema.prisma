@@ -1,0 +1,113 @@
+generator client {
+ provider = "prisma-client-js"
+}
+datasource db {
+ provider = "postgresql"
+ url = env("DATABASE_URL")
+ directUrl = env("DIRECT_URL")
+}
+enum Role {
+ SUPER_ADMIN
+ ADMIN
+ VIEWER
+}
+enum EmploymentStatus {
+ ACTIVE
+ INACTIVE
+}
+enum AttendanceStatus {
+ PRESENT
+ LATE
+ ABSENT
+ EXCUSED
+}
+enum RegistrationMethod {
+ QR
+ ADMIN
+}
+model AdminUser {
+ id String @id @default(uuid()) @db.Uuid
+ name String
+ email String @unique
+ passwordHash String
+ role Role @default(ADMIN)
+ isActive Boolean @default(true)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ sessions Session[]
+ records AttendanceRecord[]
+ auditLogs AuditLog[]
+}
+model Session {
+ id String @id
+ adminId String @db.Uuid
+ admin AdminUser @relation(fields: [adminId], references: [id])
+ expiresAt DateTime
+ @@index([expiresAt])
+}
+model Department {
+ id String @id @default(uuid()) @db.Uuid
+ name String @unique
+ isActive Boolean @default(true)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ employees Employee[]
+}
+model Employee {
+ id String @id @default(uuid()) @db.Uuid
+ employeeNumber String @unique
+ fullName String
+ normalizedEmail String @unique
+ departmentId String @db.Uuid
+ department Department @relation(fields: [departmentId], references: [id])
+ status EmploymentStatus @default(ACTIVE)
+ deactivatedAt DateTime?
+ deletedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ attendance AttendanceRecord[]
+ @@index([departmentId, status, deletedAt])
+}
+model AttendanceRecord {
+ id String @id @default(uuid()) @db.Uuid
+ employeeId String @db.Uuid
+ employee Employee @relation(fields: [employeeId], references: [id])
+ attendanceDate DateTime @db.Date
+ checkInAt DateTime?
+ originalCheckInAt DateTime?
+ status AttendanceStatus @default(PRESENT)
+ registrationMethod RegistrationMethod
+ createdByAdminId String? @db.Uuid
+ createdByAdmin AdminUser? @relation(fields: [createdByAdminId], references: [id])
+ modificationReason String?
+ deletedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([attendanceDate, status, deletedAt])
+ @@index([employeeId, attendanceDate])
+}
+model AuditLog {
+ id String @id @default(uuid()) @db.Uuid
+ actorAdminId String? @db.Uuid
+ actorAdmin AdminUser? @relation(fields: [actorAdminId], references: [id])
+ action String
+ entityType String
+ entityId String
+ oldValues Json?
+ newValues Json?
+ reason String
+ createdAt DateTime @default(now())
+ @@index([entityType, entityId, createdAt])
+}
+model SystemSetting {
+ id String @id @default(uuid()) @db.Uuid
+ key String @unique
+ value String
+ updatedAt DateTime @updatedAt
+}
+model RateLimit {
+ key String @id
+ count Int @default(1)
+ expiresAt DateTime
+ @@index([expiresAt])
+}

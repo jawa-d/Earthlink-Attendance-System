@@ -1,0 +1,134 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+:root {
+  --background: #f8fafc;
+  --foreground: #183153;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Noto Sans Arabic", sans-serif;
+  font-size: 14px;
+}
+.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+}
+button,
+a,
+input,
+select {
+  outline-offset: 4px;
+}
+button {
+  cursor: pointer;
+}
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #dbe3ed;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  color: inherit;
+}
+label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 7px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+th {
+  text-align: right;
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+}
+td,
+th {
+  padding: 15px 18px;
+  border-bottom: 1px solid #eef2f6;
+}
+.dark th {
+  background: #172237;
+}
+.dark td,
+.dark th {
+  border-color: #29364b;
+}
+.panel {
+  background: #fff;
+  border: 1px solid #e5ebf3;
+  border-radius: 16px;
+  box-shadow: 0 2px 4px #18315303;
+}
+.dark .panel {
+  background: #162137;
+  border-color: #29364b;
+}
+.muted {
+  color: #8391a5;
+}
+.badge {
+  display: inline-flex;
+  padding: 4px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+.badge.PRESENT,
+.badge.ACTIVE {
+  background: #e8f8ee;
+  color: #16814b;
+}
+.badge.LATE {
+  background: #fff5df;
+  color: #b97707;
+}
+.badge.ABSENT,
+.badge.INACTIVE {
+  background: #fef0f0;
+  color: #cf4545;
+}
+.badge.EXCUSED {
+  background: #edf2ff;
+  color: #596ac1;
+}
+.skeleton {
+  animation: pulse 1.5s infinite;
+  background: #e2e8f0;
+  border-radius: 12px;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+  @page {
+    size: A4;
+    margin: 18mm;
+  }
+}

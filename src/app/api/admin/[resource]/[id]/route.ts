@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { departmentFields } from "@/lib/departments";
 import { authorize } from "@/lib/auth";
 import { handle, HttpError, sameOrigin } from "@/lib/http";
 import {
@@ -130,8 +131,8 @@ export async function PATCH(req: Request, ctx: Context) {
         return Response.json(row);
       }
       if (resource === "departments") {
-        const data = z
-          .object({ name: z.string().min(2).max(120), isActive: z.boolean() })
+        const data = departmentFields
+          .extend({ isActive: z.boolean() })
           .parse(body);
         const old = await tx.department.findUnique({ where: { id } });
         const row = await tx.department.update({ where: { id }, data });

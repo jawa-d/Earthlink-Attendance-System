@@ -12,6 +12,7 @@
     "test:integration": "vitest run tests/integration.test.ts",
     "db:generate": "prisma generate",
     "db:check": "tsx scripts/check-database.ts",
+    "department:call-center": "tsx scripts/call-center.ts",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx scripts/seed.ts",
     "admin:bootstrap": "tsx scripts/admin.ts",

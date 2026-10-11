@@ -124,9 +124,15 @@ export function SettingsPage() {
   const departments = useQuery({
     queryKey: ["departments"],
     queryFn: () =>
-      api<{ id: string; name: string; isActive: boolean }[]>(
-        "/api/admin/departments",
-      ),
+      api<
+        {
+          id: string;
+          name: string;
+          englishName: string | null;
+          code: string | null;
+          isActive: boolean;
+        }[]
+      >("/api/admin/departments"),
   });
   const [modal, setModal] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -203,6 +209,19 @@ export function SettingsPage() {
               <input name="name" required minLength={2} />
             </label>
             <label>
+              الاسم بالإنجليزية
+              <input name="englishName" maxLength={120} dir="ltr" />
+            </label>
+            <label>
+              رمز القسم
+              <input
+                name="code"
+                maxLength={64}
+                pattern="[A-Za-z][A-Za-z0-9_]{1,63}"
+                dir="ltr"
+              />
+            </label>
+            <label>
               سبب الإضافة
               <input name="reason" required minLength={5} />
             </label>
@@ -213,8 +232,61 @@ export function SettingsPage() {
               <div key={d.id} className="flex justify-between">
                 <span>
                   {d.name}
+                  <small className="muted block">
+                    {d.englishName} {d.code ? `(${d.code})` : ""}
+                  </small>
                   <small className="muted block text-[10px]">{d.id}</small>
                 </span>
+                <details>
+                  <summary className="cursor-pointer text-xs text-blue-600">
+                    تعديل القسم
+                  </summary>
+                  <form
+                    className="space-y-3"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      save(`/api/admin/departments/${d.id}`, "PATCH", {
+                        ...Object.fromEntries(new FormData(e.currentTarget)),
+                        isActive: d.isActive,
+                      });
+                    }}
+                  >
+                    <label>
+                      الاسم بالعربية
+                      <input
+                        name="name"
+                        defaultValue={d.name}
+                        required
+                        minLength={2}
+                        maxLength={120}
+                      />
+                    </label>
+                    <label>
+                      الاسم بالإنجليزية
+                      <input
+                        name="englishName"
+                        defaultValue={d.englishName || ""}
+                        maxLength={120}
+                        dir="ltr"
+                      />
+                    </label>
+                    <label>
+                      رمز القسم
+                      <input
+                        name="code"
+                        defaultValue={d.code || ""}
+                        maxLength={64}
+                        pattern="[A-Za-z][A-Za-z0-9_]{1,63}"
+                        dir="ltr"
+                      />
+                    </label>
+                    <label>
+                      سبب التغيير
+                      <input name="reason" required minLength={5} />
+                    </label>
+                    <Button disabled={busy}>حفظ</Button>
+                  </form>
+                </details>
                 <button
                   className="text-xs text-blue-600"
                   onClick={() => {

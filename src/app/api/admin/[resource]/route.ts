@@ -3,6 +3,7 @@ import { hash } from "@node-rs/argon2";
 import { Prisma } from "@prisma/client";
 import { authorize } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { departmentFields } from "@/lib/departments";
 import { handle, HttpError, sameOrigin } from "@/lib/http";
 import {
   attendanceSchema,
@@ -33,10 +34,23 @@ export async function GET(req: Request, ctx: Context) {
         email: admin.email,
         role: admin.role,
       });
-    if(resource==='history'){
-      const entityId=z.uuid().parse(p.get('entityId'));
-      const where={entityId,entityType:{in:['Employee','AttendanceRecord']}};
-      return Response.json({rows:await db.auditLog.findMany({where,include:{actorAdmin:{select:{name:true}}},orderBy:{createdAt:'desc'},take:25,skip:(page-1)*take}),total:await db.auditLog.count({where}),page});
+    if (resource === "history") {
+      const entityId = z.uuid().parse(p.get("entityId"));
+      const where = {
+        entityId,
+        entityType: { in: ["Employee", "AttendanceRecord"] },
+      };
+      return Response.json({
+        rows: await db.auditLog.findMany({
+          where,
+          include: { actorAdmin: { select: { name: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 25,
+          skip: (page - 1) * take,
+        }),
+        total: await db.auditLog.count({ where }),
+        page,
+      });
     }
     if (resource === "departments")
       return Response.json(
@@ -334,10 +348,9 @@ export async function POST(req: Request, ctx: Context) {
         return Response.json(row, { status: 201 });
       }
       if (resource === "departments") {
-        const data = z
-          .object({ name: z.string().trim().min(2).max(120), reason })
-          .parse(body);
-        const row = await tx.department.create({ data: { name: data.name } });
+        const data = departmentFields.extend({ reason }).parse(body);
+        const { reason: note, ...fields } = data;
+        const row = await tx.department.create({ data: fields });
         await audit(
           tx,
           admin.id,
@@ -346,7 +359,7 @@ export async function POST(req: Request, ctx: Context) {
           row.id,
           null,
           row,
-          data.reason,
+          note,
         );
         return Response.json(row, { status: 201 });
       }

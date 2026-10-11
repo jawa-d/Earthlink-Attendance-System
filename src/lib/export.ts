@@ -19,22 +19,29 @@ export const headers = [
   "الحالة",
   "الطريقة",
 ];
-export async function spreadsheet(rows: (string | number)[][]) {
+export async function spreadsheet(rows: (string | number)[][], title?: string, columnHeaders = headers) {
   const book = new ExcelJS.Workbook();
   const sheet = book.addWorksheet("الحضور", { views: [{ rightToLeft: true }] });
-  sheet.addRow(headers);
+  if (title) {
+    sheet.addRow([title]);
+    sheet.mergeCells(1, 1, 1, columnHeaders.length);
+    sheet.getRow(1).font = { bold: true, size: 16 };
+  }
+  const headerRow = title ? 2 : 1;
+  sheet.addRow(columnHeaders);
   rows.forEach((r) => sheet.addRow(r));
   sheet.columns.forEach((c, i) => {
-    c.width = [18, 28, 36, 24, 18, 20, 22, 16][i];
+    c.width = [18, 28, 36, 24, 18, 20, 22, 16][i] || 24;
   });
-  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-  sheet.getRow(1).fill = {
+  sheet.getRow(headerRow).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  sheet.getRow(headerRow).fill = {
     type: "pattern",
     pattern: "solid",
     fgColor: { argb: "FF183153" },
   };
-  sheet.autoFilter = { from: "A1", to: "H1" };
+  sheet.autoFilter = { from: `A${headerRow}`, to: `${String.fromCharCode(64 + columnHeaders.length)}${headerRow}` };
   const summary = book.addWorksheet("الملخص");
+  if (title) summary.addRow([title]);
   summary.addRow(["إجمالي أحداث الحضور", rows.length]);
   const days = new Map<string, typeof rows>();
   rows.forEach((row) => {

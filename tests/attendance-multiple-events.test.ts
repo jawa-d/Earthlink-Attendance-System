@@ -50,6 +50,16 @@ function employee(): ReportEmployee {
   };
 }
 describe("multiple same-day events and administrative corrections", () => {
+  it("writes the selected leader heading and full dataset count to Excel", async () => {
+    const title = "الليدر المسؤول: ليدر تجريبي";
+    const rows = Array.from({ length: 30 }, () => ["1", "Test", "e@earthlink.iq", "Dept", "2026-10-11", "03:00", "حاضر", "QR", "ليدر تجريبي"]);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load((await spreadsheet(rows, title, Array(9).fill("column"))) as never);
+    expect(book.worksheets[0].getCell("A1").value).toBe(title);
+    expect(book.worksheets[0].rowCount).toBe(32);
+    expect(book.worksheets[0].getCell("I3").value).toBe("ليدر تجريبي");
+    expect(book.worksheets[1].getRow(2).getCell(2).value).toBe(30);
+  });
   it("counts a person once and preserves earliest/latest events", () => {
     const e = employee();
     expect(summarizeAttendanceDay(e.attendance)).toMatchObject({

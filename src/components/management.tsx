@@ -78,7 +78,7 @@ export function Management({
     q,
     status,
     department,
-    teamLeader,
+    ...(kind === "attendance" ? { teamLeaderId: teamLeader } : { teamLeader }),
     employee,
     sort,
     page: String(page),
@@ -101,7 +101,7 @@ export function Management({
   const leaders = useQuery({
     queryKey: ["team-leaders"],
     queryFn: () => api<TeamLeader[]>("/api/admin/team-leaders"),
-    enabled: kind === "employees" || kind === "reports",
+    enabled: ["employees", "reports", "attendance"].includes(kind),
   });
   const availableLeaders =
     leaders.data?.filter(
@@ -162,7 +162,7 @@ export function Management({
     await client.invalidateQueries();
   };
   const exportUrl = (format: string) =>
-    `/api/admin/export?${new URLSearchParams({ kind, format, start, end, status, department, employee, teamLeader, ...(kind === "reports" ? { group: "team-leader" } : {}) })}`;
+    `/api/admin/export?${new URLSearchParams({ kind, format, start, end, status, department, employee, q, deleted: String(deleted), ...(kind === "attendance" ? { teamLeaderId: teamLeader } : { teamLeader }), ...(kind === "reports" ? { group: "team-leader" } : {}) })}`;
   return (
     <>
       <div className="mb-8 flex flex-wrap justify-between gap-4">
@@ -342,7 +342,7 @@ export function Management({
               </select>
             </>
           )}
-          {(kind === "employees" || kind === "reports") && (
+          {["employees", "reports", "attendance"].includes(kind) && (
             <select
               aria-label="الليدر المسؤول"
               value={teamLeader}
@@ -355,7 +355,7 @@ export function Management({
               <option value="">جميع الليدرية</option>
               <option value="unassigned">بدون ليدر</option>
               {leaders.data
-                ?.filter((l) => !department || l.departmentId === department)
+                ?.filter((l) => kind === "attendance" || !department || l.departmentId === department)
                 .map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.fullName}
@@ -420,7 +420,7 @@ export function Management({
                       className="w-auto"
                       type="checkbox"
                       checked={deleted}
-                      onChange={(e) => setDeleted(e.target.checked)}
+                      onChange={(e) => { setDeleted(e.target.checked); setPage(1); }}
                     />
                     المحذوفة
                   </label>
@@ -433,6 +433,8 @@ export function Management({
             تحديث
           </Button>
         </div>
+        {kind === "attendance" && leaders.isLoading && <p role="status" className="p-4">جارٍ تحميل الليدرية…</p>}
+        {kind === "attendance" && leaders.isError && <p role="alert" className="p-4">تعذر تحميل الليدرية. <button onClick={() => leaders.refetch()}>إعادة المحاولة</button></p>}
         {query.isLoading ? (
           <div className="space-y-3 p-6">
             {[1, 2, 3].map((i) => (

@@ -29,6 +29,33 @@ function mount(node: React.ReactNode) {
   );
 }
 describe("leader interface and employee integration", () => {
+  it("attendance leader changes reset pagination and propagate all filters to exports", async () => {
+    m.api.mockImplementation(async (url: string) => {
+      if (url === "/api/admin/team-leaders") return [{ id: "leader", fullName: "ليدر تاريخي", departmentId: "old-department", isActive: false }];
+      if (url === "/api/admin/departments") return [{ id: "department", name: "القسم", isActive: true }];
+      return { rows: [], total: url.includes("teamLeaderId=leader") ? 0 : 60, page: 1 };
+    });
+    mount(<Management kind="attendance" role="SUPER_ADMIN" />);
+    const select = await screen.findByLabelText("الليدر المسؤول");
+    await screen.findByRole("option", { name: "ليدر تاريخي (غير فعال)" });
+    await waitFor(() => expect((screen.getByRole("button", { name: "التالي" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "التالي" }));
+    await waitFor(() => expect(m.api.mock.calls.some(([url]) => url.includes("/attendance?") && url.includes("page=2"))).toBe(true));
+    fireEvent.change(screen.getByLabelText("البحث"), { target: { value: "Ali" } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.change(select, { target: { value: "leader" } });
+    await waitFor(() => expect(m.api.mock.calls.some(([url]) => url.includes("teamLeaderId=leader") && url.includes("page=1") && url.includes("q=Ali") && url.includes("deleted=true"))).toBe(true));
+    for (const format of ["Excel", "PDF"]) {
+      const href = screen.getByRole("link", { name: format }).getAttribute("href")!;
+      const p = new URL(href, "https://example.com").searchParams;
+      expect(p.get("teamLeaderId")).toBe("leader");
+      expect(p.get("q")).toBe("Ali");
+      expect(p.get("deleted")).toBe("true");
+      expect(p.has("page")).toBe(false);
+    }
+    await screen.findByText("لا توجد سجلات تطابق البحث");
+    expect((screen.getByRole("button", { name: "التالي" }) as HTMLButtonElement).disabled).toBe(true);
+  });
   it("filters active leaders by department, selects inline creation, and preserves employee fields", async () => {
     const leaders = [
       { id: "active", fullName: "ليدر فعال", departmentId, isActive: true },

@@ -1,14 +1,13 @@
+import { getAttendanceList, attendanceFilters } from "@/lib/attendance-list";
 import ExcelJS from "exceljs";
 import { authorize } from "@/lib/auth";
 import { handle, HttpError, sameOrigin } from "@/lib/http";
 import { db } from "@/lib/db";
 import {
-  businessDate,
-  dateValue,
   employeeSchema,
   reason,
 } from "@/lib/validation";
-import { pdfReport, spreadsheet, statusNames } from "@/lib/export";
+import { pdfReport, spreadsheet, statusNames, headers } from "@/lib/export";
 import { z } from "zod";
 import { audit } from "@/lib/service";
 import { getLeaderReport } from "@/lib/leader-report-service";
@@ -78,7 +77,7 @@ export async function GET(req: Request) {
         },
       });
     }
-    if (p.get("group") === "team-leader" || p.get("teamLeader")) {
+    if (p.get("kind") !== "attendance" && (p.get("group") === "team-leader" || p.get("teamLeader"))) {
       const pdf = p.get("format") === "pdf";
       const buffer = await exportLeaderReport(await getLeaderReport(p), pdf);
       return new Response(new Uint8Array(buffer), {
@@ -91,67 +90,13 @@ export async function GET(req: Request) {
         },
       });
     }
-    const start = dateValue(p.get("start") || businessDate());
-    const end = dateValue(p.get("end") || p.get("start") || businessDate());
-    if (end < start || end.getTime() - start.getTime() > 366 * 86400000)
-      throw new HttpError(400, "فترة غير صالحة");
-    const employees = await db.employee.findMany({
-      where: {
-        ...(p.get("department") ? { departmentId: p.get("department")! } : {}),
-        ...(p.get("employee") ? { id: p.get("employee")! } : {}),
-      },
-      include: {
-        department: true,
-        attendance: {
-          where: { deletedAt: null, attendanceDate: { gte: start, lte: end } },
-          orderBy: { attendanceDate: "asc" },
-        },
-      },
-    });
-    const rows = employees.flatMap((e) => {
-      if (p.get("status") === "UNREGISTERED") {
-        const missing: string[][] = [];
-        for (let d = start; d <= end; d = new Date(d.getTime() + 86400000)) {
-          if (
-            e.status === "ACTIVE" &&
-            !e.deletedAt &&
-            e.createdAt.getTime() < d.getTime() + 86400000 &&
-            !e.attendance.some(
-              (r) => r.attendanceDate.getTime() === d.getTime(),
-            )
-          )
-            missing.push([
-              e.employeeNumber,
-              e.fullName,
-              e.normalizedEmail,
-              e.department.name,
-              d.toISOString().slice(0, 10),
-              "—",
-              statusNames.UNREGISTERED,
-              "—",
-            ]);
-        }
-        return missing;
-      }
-      return e.attendance
-        .filter((r) => !p.get("status") || r.status === p.get("status"))
-        .map((r) => [
-          e.employeeNumber,
-          e.fullName,
-          e.normalizedEmail,
-          e.department.name,
-          r.attendanceDate.toISOString().slice(0, 10),
-          r.checkInAt?.toLocaleTimeString("en-GB", {
-            timeZone: "Asia/Baghdad",
-          }) || "—",
-          statusNames[r.status],
-          r.registrationMethod,
-        ]);
-    });
+    const result = await getAttendanceList(p, true);
+    const leaderId = attendanceFilters(p).leader;
+    const leader = leaderId && leaderId !== "unassigned" ? await db.teamLeader.findUnique({ where: { id: leaderId } }) : null;
+    const title = "تقرير الحضور — Earthlink" + (leaderId ? " — الليدر المسؤول: " + (leader?.fullName || (leaderId === "unassigned" ? "بدون ليدر" : "غير معروف")) : "");
+    const rows = result.rows.map(r => [r.employee.employeeNumber, r.employee.fullName, r.employee.normalizedEmail, r.employee.department.name, r.attendanceDate.toISOString().slice(0, 10), r.checkInAt?.toLocaleTimeString("en-GB", { timeZone: "Asia/Baghdad" }) || "—", statusNames[r.status], r.registrationMethod || "—", r.teamLeaderName]);
     const pdf = p.get("format") === "pdf";
-    const buffer = pdf
-      ? await pdfReport("تقرير الحضور — Earthlink", rows)
-      : await spreadsheet(rows);
+    const buffer = pdf ? await pdfReport(title, rows, undefined, [...headers, "الليدر المسؤول"]) : await spreadsheet(rows, title, [...headers, "الليدر المسؤول"]);
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": pdf

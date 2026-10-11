@@ -1,3 +1,4 @@
+import { getAttendanceList } from "@/lib/attendance-list";
 import { z } from "zod";
 import { hash } from "@node-rs/argon2";
 import { Prisma } from "@prisma/client";
@@ -166,76 +167,7 @@ export async function GET(req: Request, ctx: Context) {
       });
     }
     if (resource === "attendance" || resource === "reports") {
-      const start = dateValue(
-        p.get("start") || p.get("date") || businessDate(),
-      );
-      const end = dateValue(p.get("end") || p.get("date") || businessDate());
-      if (end < start || (end.getTime() - start.getTime()) / 86400000 > 366)
-        throw new HttpError(400, "اختر فترة لا تتجاوز سنة");
-      const employees = await db.employee.findMany({
-        where: {
-          departmentId,
-          ...(p.get("employee")
-            ? { id: z.uuid().parse(p.get("employee")) }
-            : {}),
-          ...(q
-            ? {
-                OR: [
-                  { fullName: { contains: q, mode: "insensitive" } },
-                  { normalizedEmail: { contains: q, mode: "insensitive" } },
-                ],
-              }
-            : {}),
-        },
-        include: {
-          department: true,
-          attendance: {
-            where: {
-              attendanceDate: { gte: start, lte: end },
-              ...(p.get("deleted") === "true" ? {} : { deletedAt: null }),
-            },
-            orderBy: { attendanceDate: "desc" },
-          },
-        },
-        orderBy: { fullName: "asc" },
-      });
-      const rows = employees.flatMap<Record<string, unknown>>((e) => {
-        const { attendance, ...employee } = e;
-        if (p.get("status") === "UNREGISTERED") {
-          const result = [];
-          for (
-            let date = start;
-            date <= end;
-            date = new Date(date.getTime() + 86400000)
-          ) {
-            if (
-              e.status === "ACTIVE" &&
-              !e.deletedAt &&
-              e.createdAt.getTime() < date.getTime() + 86400000 &&
-              !attendance.some(
-                (r) => r.attendanceDate.getTime() === date.getTime(),
-              )
-            )
-              result.push({
-                id: `${e.id}-${date.toISOString()}`,
-                employee,
-                attendanceDate: date,
-                status: "UNREGISTERED",
-                checkInAt: null,
-                registrationMethod: null,
-              });
-          }
-          return result;
-        }
-        return attendance
-          .filter((r) => !p.get("status") || r.status === p.get("status"))
-          .map((r) => ({ ...r, employee }));
-      });
-      return Response.json({
-        rows: rows.slice((page - 1) * take, page * take),
-        total: rows.length,
-        page,
-      });
+      return Response.json(await getAttendanceList(p), { headers: { "Cache-Control": "private, no-store" } });
     }
     if (resource === "dashboard") {
       const today = dateValue(p.get("date") || businessDate());

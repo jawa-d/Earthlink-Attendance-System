@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { departmentFields, resolveCallCenter } from "../src/lib/departments";
 describe("department metadata and safe Call Center reuse", () => {
-  it("preserves compatibility with existing name-only requests", () => {
-    expect(departmentFields.parse({ name: "مركز الاتصال" })).toEqual({
-      name: "مركز الاتصال",
-    });
+  it("requires a department code on creation", () => {
+    expect(() => departmentFields.parse({ name: "مركز الاتصال" })).toThrow();
   });
   it("normalizes codes and permits clearing optional metadata", () => {
     expect(

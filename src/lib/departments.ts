@@ -14,10 +14,10 @@ export const departmentFields = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .regex(/^[A-Z][A-Z0-9_]{1,63}$|^$/)
-    .nullable()
-    .optional()
-    .transform((value) => (value === "" ? null : value)),
+    .regex(
+      /^[A-Z][A-Z0-9_]{1,63}$/,
+      "رمز القسم مطلوب: حروف إنجليزية وأرقام وشرطة سفلية",
+    ),
 });
 
 export const CALL_CENTER = {

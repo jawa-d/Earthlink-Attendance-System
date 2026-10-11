@@ -1,7 +1,7 @@
 "use client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Plus, Search, Download, Upload, Filter } from "lucide-react";
 import { api } from "@/lib/client";
@@ -10,6 +10,7 @@ import { statusNames } from "@/lib/export-labels";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { RecordsTable, type Row } from "./records-table";
+import { DepartmentEditor, type Department } from "./department-editor";
 type List = { rows: Row[]; total: number; page: number };
 type FormValues = {
   employeeNumber: string;
@@ -46,7 +47,10 @@ export function Management({ kind, role }: { kind: string; role: string }) {
   const [view, setView] = useState<Row | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const { register, reset, handleSubmit } = useForm<FormValues>();
+  const [addingDepartment, setAddingDepartment] = useState(false);
+  const { register, reset, handleSubmit, setValue, control } =
+    useForm<FormValues>();
+  const selectedDepartment = useWatch({ control, name: "departmentId" }) || "";
   const writable =
     role !== "VIEWER" && kind !== "reports" && kind !== "audit-logs";
   const params = new URLSearchParams({
@@ -66,9 +70,9 @@ export function Management({ kind, role }: { kind: string; role: string }) {
   });
   const departments = useQuery({
     queryKey: ["departments"],
-    queryFn: () =>
-      api<{ id: string; name: string }[]>("/api/admin/departments"),
+    queryFn: () => api<Department[]>("/api/admin/departments"),
   });
+  const activeDepartments = departments.data?.filter((d) => d.isActive) || [];
   const choices = useQuery({
     queryKey: ["employee-choices"],
     queryFn: async () => {
@@ -96,7 +100,7 @@ export function Management({ kind, role }: { kind: string; role: string }) {
       employeeNumber: r?.employeeNumber || "",
       fullName: r?.fullName || "",
       normalizedEmail: r?.normalizedEmail || "",
-      departmentId: r?.departmentId || departments.data?.[0]?.id || "",
+      departmentId: r?.departmentId || activeDepartments[0]?.id || "",
       employeeId:
         r?.employeeId || r?.employee?.id || choices.data?.[0]?.id || "",
       status:
@@ -444,14 +448,44 @@ export function Management({ kind, role }: { kind: string; role: string }) {
                 />
               </Field>
               <Field label="القسم">
-                <select required {...register("departmentId")}>
-                  {departments.data?.map((d) => (
+                <select
+                  required
+                  disabled={departments.isPending || !!departments.error}
+                  {...register("departmentId")}
+                  value={selectedDepartment}
+                >
+                  <option value="">اختر القسم</option>
+                  {activeDepartments.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
                     </option>
                   ))}
                 </select>
               </Field>
+              {departments.isPending && (
+                <p role="status">جارٍ تحميل الأقسام…</p>
+              )}
+              {departments.error && (
+                <p role="alert">
+                  تعذر تحميل الأقسام: {departments.error.message}
+                </p>
+              )}
+              {!departments.isPending &&
+                !departments.error &&
+                activeDepartments.length === 0 && (
+                  <p role="status">
+                    لا توجد أقسام فعالة. أضف قسماً أو تواصل مع مسؤول النظام.
+                  </p>
+                )}
+              {role === "SUPER_ADMIN" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddingDepartment(true)}
+                >
+                  + إضافة قسم
+                </Button>
+              )}
             </>
           ) : (
             <>
@@ -605,6 +639,16 @@ export function Management({ kind, role }: { kind: string; role: string }) {
             </>
           )}
       </Dialog>
+      <DepartmentEditor
+        open={addingDepartment}
+        onOpenChange={setAddingDepartment}
+        onCreated={(d) =>
+          setValue("departmentId", d.id, {
+            shouldDirty: true,
+            shouldValidate: true,
+          })
+        }
+      />
     </>
   );
 }

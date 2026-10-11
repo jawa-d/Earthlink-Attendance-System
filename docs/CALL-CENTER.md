@@ -1,5 +1,7 @@
 # Call Center update
 
+Current status: the later Department Management task applied the additive migration and created the active Call Center record safely. An idempotent rerun made no changes; existing administrator, employee and attendance counts were preserved. See `DEPARTMENT-MANAGEMENT.md` for the current interface and release status. The approval-gated steps below describe the original preparation procedure.
+
 Prepared target: Arabic name `مركز الاتصال`, English name `Call Center`, code `CALL_CENTER`, active.
 
 The existing Department table receives nullable `englishName` and unique nullable `code` columns. Existing department IDs, names, employee links and status remain intact. No new tables or attendance rules are introduced.

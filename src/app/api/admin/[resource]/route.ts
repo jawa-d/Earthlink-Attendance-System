@@ -54,7 +54,31 @@ export async function GET(req: Request, ctx: Context) {
     }
     if (resource === "departments")
       return Response.json(
-        await db.department.findMany({ orderBy: { name: "asc" } }),
+        await db.department.findMany({
+          where: {
+            ...(p.get("active") === "true"
+              ? { isActive: true }
+              : p.get("active") === "false"
+                ? { isActive: false }
+                : {}),
+            ...(q
+              ? {
+                  OR: [
+                    { name: { contains: q, mode: "insensitive" as const } },
+                    {
+                      englishName: {
+                        contains: q,
+                        mode: "insensitive" as const,
+                      },
+                    },
+                    { code: { contains: q, mode: "insensitive" as const } },
+                  ],
+                }
+              : {}),
+          },
+          include: { _count: { select: { employees: true } } },
+          orderBy: { name: "asc" },
+        }),
       );
     if (resource === "settings")
       return Response.json(await db.systemSetting.findMany());
@@ -348,7 +372,9 @@ export async function POST(req: Request, ctx: Context) {
         return Response.json(row, { status: 201 });
       }
       if (resource === "departments") {
-        const data = departmentFields.extend({ reason }).parse(body);
+        const data = departmentFields
+          .extend({ reason, isActive: z.boolean().default(true) })
+          .parse(body);
         const { reason: note, ...fields } = data;
         const row = await tx.department.create({ data: fields });
         await audit(

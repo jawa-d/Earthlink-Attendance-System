@@ -132,9 +132,15 @@ export async function PATCH(req: Request, ctx: Context) {
       }
       if (resource === "departments") {
         const data = departmentFields
-          .extend({ isActive: z.boolean() })
+          .partial()
+          .extend({ isActive: z.boolean().optional() })
+          .refine(
+            (value) => Object.values(value).some((v) => v !== undefined),
+            "حدد بيانات التغيير",
+          )
           .parse(body);
         const old = await tx.department.findUnique({ where: { id } });
+        if (!old) throw new HttpError(404, "القسم غير موجود");
         const row = await tx.department.update({ where: { id }, data });
         await audit(tx, admin.id, "UPDATE", "Department", id, old, row, note);
         return Response.json(row);
@@ -148,9 +154,18 @@ export async function DELETE(req: Request, ctx: Context) {
     sameOrigin(req);
     const { resource, id } = await ctx.params;
     z.uuid().parse(id);
-    const admin = await authorize("write");
+    const admin = await authorize(
+      resource === "departments" ? "super" : "write",
+    );
     const note = reason.parse((await req.json()).reason);
     return db.$transaction(async (tx) => {
+      if (resource === "departments") {
+        // Never physically delete departments, including those linked to history.
+        throw new HttpError(
+          409,
+          "لا يمكن حذف الأقسام نهائياً. استخدم إيقاف القسم للحفاظ على الموظفين وسجل الحضور.",
+        );
+      }
       if (resource === "employees") {
         await tx.$queryRaw`SELECT id FROM "Employee" WHERE id=${id}::uuid FOR UPDATE`;
         const old = await tx.employee.findUnique({ where: { id } });

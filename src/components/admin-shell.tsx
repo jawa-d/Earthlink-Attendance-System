@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Users,
+  Building2,
   CalendarCheck,
   ChartNoAxesCombined,
   QrCode,
@@ -21,6 +22,7 @@ import { api } from "@/lib/client";
 const links = [
   ["/admin", "لوحة التحكم", LayoutDashboard],
   ["/admin/employees", "الموظفون", Users],
+  ["/admin/departments", "الأقسام", Building2],
   ["/admin/attendance", "سجل الحضور", CalendarCheck],
   ["/admin/reports", "التقارير والإحصائيات", ChartNoAxesCombined],
   ["/admin/qr", "رمز الحضور QR", QrCode],

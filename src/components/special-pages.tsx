@@ -216,6 +216,7 @@ export function SettingsPage() {
               رمز القسم
               <input
                 name="code"
+                required
                 maxLength={64}
                 pattern="[A-Za-z][A-Za-z0-9_]{1,63}"
                 dir="ltr"
@@ -275,7 +276,8 @@ export function SettingsPage() {
                       <input
                         name="code"
                         defaultValue={d.code || ""}
-                        maxLength={64}
+                          required
+                          maxLength={64}
                         pattern="[A-Za-z][A-Za-z0-9_]{1,63}"
                         dir="ltr"
                       />

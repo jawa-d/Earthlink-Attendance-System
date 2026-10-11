@@ -16,7 +16,7 @@ export default function Attendance() {
   } = useForm<{ email: string }>();
   const [error, setError] = useState("");
   return (
-    <main className="flex min-h-screen items-center justify-center p-5">
+    <main className="flex flex-1 items-center justify-center p-5">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#183153] text-white">

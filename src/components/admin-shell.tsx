@@ -19,6 +19,7 @@ import {
   Bell,
 } from "lucide-react";
 import { api } from "@/lib/client";
+import { ProjectCredits } from "./project-credits";
 const links = [
   ["/admin", "لوحة التحكم", LayoutDashboard],
   ["/admin/employees", "الموظفون", Users],
@@ -113,7 +114,7 @@ export function AdminShell({
           </button>
         </div>
       </aside>
-      <div className="lg:mr-64">
+      <div className="flex min-h-screen flex-col lg:mr-64">
         <header className="no-print flex h-20 items-center justify-between border-b border-slate-200 bg-white px-5 dark:border-slate-700 dark:bg-slate-900 md:px-9">
           <div className="flex items-center gap-4">
             <button
@@ -149,7 +150,10 @@ export function AdminShell({
             <span className="text-xs font-semibold">{admin.name}</span>
           </div>
         </header>
-        <main className="mx-auto max-w-[1600px] p-5 md:p-9">{children}</main>
+        <main className="mx-auto w-full max-w-[1600px] flex-1 p-5 md:p-9">
+          {children}
+        </main>
+        <ProjectCredits />
       </div>
     </div>
   );

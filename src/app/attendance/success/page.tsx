@@ -10,7 +10,7 @@ export default function Success() {
     if (value) queueMicrotask(() => setResult(JSON.parse(value)));
   }, []);
   return (
-    <main className="flex min-h-screen items-center justify-center p-5">
+    <main className="flex flex-1 items-center justify-center p-5">
       <section className="panel w-full max-w-md p-9 text-center">
         <CheckCircle2 className="mx-auto mb-5 text-green-600" size={56} />
         <h1 className="text-xl font-bold">

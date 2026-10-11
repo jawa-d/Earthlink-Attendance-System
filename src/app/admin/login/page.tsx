@@ -14,7 +14,7 @@ export default function Login() {
     formState: { isSubmitting },
   } = useForm<{ email: string; password: string }>();
   return (
-    <main className="flex min-h-screen items-center justify-center p-5">
+    <main className="flex flex-1 items-center justify-center p-5">
       <section className="panel w-full max-w-md p-9">
         <LockKeyhole className="mb-6 text-blue-600" size={32} />
         <p className="muted mb-2" dir="ltr">

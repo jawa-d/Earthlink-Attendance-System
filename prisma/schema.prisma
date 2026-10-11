@@ -54,6 +54,8 @@ model Department {
  createdAt DateTime @default(now())
  updatedAt DateTime @updatedAt
  employees Employee[]
+ teamLeaders TeamLeader[]
+ employeeAssignments EmployeeAssignment[]
 }
 model Employee {
  id String @id @default(uuid()) @db.Uuid
@@ -68,7 +70,42 @@ model Employee {
  createdAt DateTime @default(now())
  updatedAt DateTime @updatedAt
  attendance AttendanceRecord[]
+ teamLeaderId String? @db.Uuid
+ teamLeader TeamLeader? @relation(fields: [teamLeaderId], references: [id], onDelete: Restrict)
+ assignments EmployeeAssignment[]
  @@index([departmentId, status, deletedAt])
+ @@index([teamLeaderId, status, deletedAt])
+}
+model TeamLeader {
+ id String @id @default(uuid()) @db.Uuid
+ fullName String
+ employeeNumber String?
+ departmentId String @db.Uuid
+ department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+ isActive Boolean @default(true)
+ notes String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ employees Employee[]
+ assignments EmployeeAssignment[]
+ @@index([departmentId, isActive])
+}
+model EmployeeAssignment {
+ id String @id @default(uuid()) @db.Uuid
+ employeeId String @db.Uuid
+ employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+ teamLeaderId String? @db.Uuid
+ teamLeader TeamLeader? @relation(fields: [teamLeaderId], references: [id], onDelete: Restrict)
+ departmentId String @db.Uuid
+ department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+ leaderName String?
+ departmentName String
+ status EmploymentStatus
+ effectiveFrom DateTime @db.Date
+ effectiveTo DateTime? @db.Date
+ @@unique([employeeId, effectiveFrom])
+ @@index([teamLeaderId, effectiveFrom, effectiveTo])
+ @@index([departmentId, effectiveFrom, effectiveTo])
 }
 model AttendanceRecord {
  id String @id @default(uuid()) @db.Uuid

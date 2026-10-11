@@ -46,13 +46,18 @@ export async function spreadsheet(rows: (string | number)[][]) {
 export function rtl(s: string) {
   return /[\u0600-\u06ff]/.test(s) ? s.split(" ").reverse().join(" ") : s;
 }
-export async function pdfReport(title: string, rows: string[][], qr?: string) {
+export async function pdfReport(
+  title: string,
+  rows: string[][],
+  qr?: string,
+  columnHeaders: string[] = headers,
+) {
   const font = path.join(process.cwd(), "public/fonts/NotoSansArabic.ttf");
   const printer = new PdfPrinter({
     Arabic: { normal: font, bold: font, italics: font, bolditalics: font },
   });
   const table: TableCell[][] = [
-    headers
+    columnHeaders
       .slice()
       .reverse()
       .map((s) => ({ text: rtl(s), bold: true, fillColor: "#e2e8f0" })),
@@ -100,7 +105,10 @@ export async function pdfReport(title: string, rows: string[][], qr?: string) {
             {
               table: {
                 headerRows: 1,
-                widths: [50, 55, 65, 65, 80, 140, 95, 60],
+                widths:
+                  columnHeaders.length === 8
+                    ? [50, 55, 65, 65, 80, 140, 95, 60]
+                    : columnHeaders.map(() => "*"),
                 body: table,
               },
               layout: "lightHorizontalLines",

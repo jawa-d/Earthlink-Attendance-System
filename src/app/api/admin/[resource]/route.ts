@@ -4,6 +4,11 @@ import { Prisma } from "@prisma/client";
 import { authorize } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { departmentFields } from "@/lib/departments";
+import {
+  lockAssignments,
+  validateLeaderAssignment,
+  recordAssignment,
+} from "@/lib/team-leaders";
 import { handle, HttpError, sameOrigin } from "@/lib/http";
 import {
   attendanceSchema,
@@ -122,6 +127,14 @@ export async function GET(req: Request, ctx: Context) {
       const where: Prisma.EmployeeWhereInput = {
         deletedAt: null,
         departmentId,
+        ...(p.get("teamLeader")
+          ? {
+              teamLeaderId:
+                p.get("teamLeader") === "unassigned"
+                  ? null
+                  : z.uuid().parse(p.get("teamLeader")),
+            }
+          : {}),
         ...(p.get("status")
           ? { status: z.enum(["ACTIVE", "INACTIVE"]).parse(p.get("status")) }
           : {}),
@@ -142,7 +155,7 @@ export async function GET(req: Request, ctx: Context) {
       return Response.json({
         rows: await db.employee.findMany({
           where,
-          include: { department: true },
+          include: { department: true, teamLeader: true },
           orderBy: { [sort]: p.get("order") === "desc" ? "desc" : "asc" },
           skip: (page - 1) * take,
           take,
@@ -316,18 +329,26 @@ export async function POST(req: Request, ctx: Context) {
     const body = await req.json();
     return db.$transaction(async (tx) => {
       if (resource === "employees") {
+        await lockAssignments(tx);
         const data = employeeSchema.parse(body);
         const note = reason.parse(body.reason);
         const department = await tx.department.findUnique({
           where: { id: data.departmentId },
         });
         if (!department?.isActive) throw new HttpError(400, "القسم غير فعال");
+        await validateLeaderAssignment(
+          tx,
+          data.departmentId,
+          data.status,
+          data.teamLeaderId,
+        );
         const row = await tx.employee.create({
           data: {
             ...data,
             deactivatedAt: data.status === "INACTIVE" ? new Date() : null,
           },
         });
+        await recordAssignment(tx, row, new Date(), true);
         await audit(
           tx,
           admin.id,

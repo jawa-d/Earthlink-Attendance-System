@@ -11,14 +11,34 @@ import {
 import { pdfReport, spreadsheet, statusNames } from "@/lib/export";
 import { z } from "zod";
 import { audit } from "@/lib/service";
+import { getLeaderReport } from "@/lib/leader-report-service";
+import { exportLeaderReport } from "@/lib/leader-report-export";
+import {
+  lockAssignments,
+  validateLeaderAssignment,
+  recordAssignment,
+} from "@/lib/team-leaders";
 export async function GET(req: Request) {
   return handle(async () => {
     await authorize();
     const p = new URL(req.url).searchParams;
     if (p.get("kind") === "employees") {
       const employees = await db.employee.findMany({
-        where: { deletedAt: null },
-        include: { department: true },
+        where: {
+          deletedAt: null,
+          ...(p.get("department")
+            ? { departmentId: z.uuid().parse(p.get("department")) }
+            : {}),
+          ...(p.get("teamLeader")
+            ? {
+                teamLeaderId:
+                  p.get("teamLeader") === "unassigned"
+                    ? null
+                    : z.uuid().parse(p.get("teamLeader")),
+              }
+            : {}),
+        },
+        include: { department: true, teamLeader: true },
         orderBy: { fullName: "asc" },
       });
       const book = new ExcelJS.Workbook();
@@ -32,6 +52,8 @@ export async function GET(req: Request) {
         "departmentId",
         "status",
         "department",
+        "teamLeaderId",
+        "teamLeader",
       ]);
       employees.forEach((e) =>
         sheet.addRow([
@@ -41,16 +63,31 @@ export async function GET(req: Request) {
           e.departmentId,
           e.status,
           e.department.name,
+          e.teamLeaderId || "",
+          e.teamLeader?.fullName || "",
         ]),
       );
       sheet.columns.forEach((c) => (c.width = 30));
-      sheet.autoFilter = "A1:F1";
+      sheet.autoFilter = "A1:H1";
       return new Response(new Uint8Array(await book.xlsx.writeBuffer()), {
         headers: {
           "Content-Type":
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "Content-Disposition": 'attachment; filename="employees.xlsx"',
           "Cache-Control": "no-store",
+        },
+      });
+    }
+    if (p.get("group") === "team-leader" || p.get("teamLeader")) {
+      const pdf = p.get("format") === "pdf";
+      const buffer = await exportLeaderReport(await getLeaderReport(p), pdf);
+      return new Response(new Uint8Array(buffer), {
+        headers: {
+          "Content-Type": pdf
+            ? "application/pdf"
+            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="team-leader-attendance.${pdf ? "pdf" : "xlsx"}"`,
+          "Cache-Control": "private, no-store",
         },
       });
     }
@@ -150,30 +187,45 @@ export async function POST(req: Request) {
     if (expected.some((s, i) => sheet.getRow(1).getCell(i + 1).text !== s))
       throw new HttpError(400, "استخدم أعمدة ملف تصدير الموظفين");
     const rows: z.infer<typeof employeeSchema>[] = [];
+    let leaderColumn = 0;
+    sheet.getRow(1).eachCell((cell, index) => {
+      if (cell.text === "teamLeaderId") leaderColumn = index;
+    });
     for (let i = 2; i <= sheet.rowCount; i++) {
       const row = sheet.getRow(i);
       if (!row.hasValues) continue;
       rows.push(
         employeeSchema.parse(
-          Object.fromEntries(
-            expected.map((key, j) => [key, row.getCell(j + 1).text]),
-          ),
+          Object.fromEntries([
+            ...expected.map((key, j) => [key, row.getCell(j + 1).text]),
+            ...(leaderColumn
+              ? [["teamLeaderId", row.getCell(leaderColumn).text]]
+              : []),
+          ]),
         ),
       );
     }
     await db.$transaction(
       async (tx) => {
+        await lockAssignments(tx);
         for (const data of rows) {
           const department = await tx.department.findUnique({
             where: { id: data.departmentId },
           });
           if (!department?.isActive) throw new HttpError(400, "قسم غير فعال");
+          await validateLeaderAssignment(
+            tx,
+            data.departmentId,
+            data.status,
+            data.teamLeaderId,
+          );
           const row = await tx.employee.create({
             data: {
               ...data,
               deactivatedAt: data.status === "INACTIVE" ? new Date() : null,
             },
           });
+          await recordAssignment(tx, row, new Date(), true);
           await audit(
             tx,
             admin.id,

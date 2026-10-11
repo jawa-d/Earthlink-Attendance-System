@@ -6,8 +6,10 @@ import { isLocalAdminPreview } from "@/lib/preview";
 import { PreviewSection } from "@/components/preview-section";
 export default async function Page({
   params,
+  searchParams,
 }: {
   params: Promise<{ section: string }>;
+  searchParams: Promise<{ teamLeader?: string }>;
 }) {
   const { section } = await params;
   if (isLocalAdminPreview()) {
@@ -40,6 +42,12 @@ export default async function Page({
   if (section === "profile")
     return <Profile name={admin.name} email={admin.email} role={admin.role} />;
   if (["employees", "attendance", "reports", "audit-logs"].includes(section))
-    return <Management kind={section} role={admin.role} />;
+    return (
+      <Management
+        kind={section}
+        role={admin.role}
+        initialTeamLeader={(await searchParams).teamLeader || ""}
+      />
+    );
   notFound();
 }

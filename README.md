@@ -21,7 +21,11 @@ npm.cmd run dev
 
 Open `/attendance` or `/admin/login`. Before bootstrap, set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME` and a unique `BOOTSTRAP_ADMIN_PASSWORD` of at least 14 characters. Bootstrap refuses to run if any administrator exists. Remove the bootstrap password after use. To create departments, employees and other administrator accounts, sign in as the first super administrator and use Settings. `npm.cmd run db:seed` optionally creates 12 explicitly fictional employees in a test department; run only on a development database.
 
+On Windows, use `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap-admin.ps1` for masked local credential entry. Set `LOCAL_ADMIN_PREVIEW=false` first and keep the local development server running. This wrapper invokes the existing secure bootstrap, then verifies the Argon2id hash, audit entry, real HTTP login, server-side session persistence, protected pages/APIs, and logout. Credentials live only in temporary process environment and memory; the ignored `.local/admin-verification.json` contains check names and pass/fail results only. It creates no default credentials and refuses to bootstrap if an administrator already exists. Do not rerun bootstrap after successful account creation.
+
 Generate a secret with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Never commit `.env`. DATABASE_URL uses Neon's pooled hostname with a small per-process connection limit; DIRECT_URL uses its direct hostname for Prisma migrations. A local PostgreSQL URL works for both variables.
+
+After the account exists, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap-admin.ps1 -VerifyOnly`. Enter the existing email and password at the masked prompts. This mode never invokes bootstrap or password reset. The redacted report includes login HTTP statuses to distinguish rejected credentials from server failures. Restart `npm.cmd run dev` after changing database connection configuration: a development Prisma client cached before configuration can retain its old initialization state.
 
 ## Behaviour and permissions
 

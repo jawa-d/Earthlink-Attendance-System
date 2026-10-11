@@ -15,6 +15,10 @@ export const employeeSchema = z.object({
   normalizedEmail: corporateEmail,
   departmentId: z.uuid(),
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
+  teamLeaderId: z
+    .union([z.uuid(), z.literal(""), z.null()])
+    .optional()
+    .transform((v) => (v === "" ? null : v)),
 });
 export const dateSchema = z
   .string()

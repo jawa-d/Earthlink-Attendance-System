@@ -64,6 +64,7 @@ describe("employee department dropdown", () => {
         return created;
       }
       if (url === "/api/admin/departments") return [...rows];
+      if (url === "/api/admin/team-leaders") return [];
       return { rows: [], total: 0, page: 1 };
     });
     const client = new QueryClient({

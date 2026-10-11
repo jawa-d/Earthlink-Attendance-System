@@ -11,6 +11,8 @@ const requiredTables = [
   "AuditLog",
   "SystemSetting",
   "RateLimit",
+  "TeamLeader",
+  "EmployeeAssignment",
 ];
 function connection(key: "DATABASE_URL" | "DIRECT_URL") {
   const value = process.env[key];

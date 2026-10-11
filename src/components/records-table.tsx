@@ -7,6 +7,10 @@ export type Row = {
   fullName?: string;
   normalizedEmail?: string;
   departmentId?: string;
+  teamLeaderId?: string | null;
+  teamLeader?: { fullName: string; isActive?: boolean } | null;
+  teamLeaderName?: string;
+  historyUnknown?: boolean;
   department?: { name: string };
   status?: string;
   employeeId?: string;
@@ -54,6 +58,7 @@ export function RecordsTable({
                     "الموظف",
                     "البريد الوظيفي",
                     "القسم",
+                    "الليدر المسؤول",
                     "الحالة",
                     "الإجراءات",
                   ]
@@ -61,6 +66,7 @@ export function RecordsTable({
                     "الموظف",
                     "البريد الوظيفي",
                     "القسم",
+                    "الليدر المسؤول",
                     "التاريخ",
                     "وقت الحضور",
                     "الحالة",
@@ -112,6 +118,14 @@ export function RecordsTable({
                       {e.normalizedEmail}
                     </td>
                     <td>{e.department?.name}</td>
+                    <td>
+                      {r.teamLeaderName ||
+                        e.teamLeader?.fullName ||
+                        "بدون ليدر"}
+                      {r.historyUnknown && (
+                        <small className="muted block">التاريخ غير مكتمل</small>
+                      )}
+                    </td>
                     {kind !== "employees" && (
                       <>
                         <td>{r.attendanceDate?.slice(0, 10)}</td>
@@ -160,14 +174,16 @@ export function RecordsTable({
                             تعديل
                           </Button>
                         )}
-                        {onDelete && !r.deletedAt && r.status!=='UNREGISTERED' && (
-                          <button
-                            className="text-[10px] text-red-500"
-                            onClick={() => onDelete(r)}
-                          >
-                            حذف
-                          </button>
-                        )}
+                        {onDelete &&
+                          !r.deletedAt &&
+                          r.status !== "UNREGISTERED" && (
+                            <button
+                              className="text-[10px] text-red-500"
+                              onClick={() => onDelete(r)}
+                            >
+                              حذف
+                            </button>
+                          )}
                         {onRestore && r.deletedAt && (
                           <button
                             onClick={() => onRestore(r)}

@@ -23,7 +23,17 @@ export async function handle(fn: () => Promise<Response>) {
       );
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
       return Response.json({ error: "السجل موجود مسبقاً" }, { status: 409 });
-    console.error(e instanceof Error ? e.name : "Server error");
+    // Classify initialization failures without logging connection strings or messages.
+    if (e instanceof Prisma.PrismaClientInitializationError) {
+      const category = /Environment variable not found/.test(e.message)
+        ? "missing-environment"
+        : /Can't reach database server/.test(e.message)
+          ? "database-unreachable"
+          : /Authentication failed/.test(e.message)
+            ? "database-credentials-rejected"
+            : "initialization-failed";
+      console.error(`PrismaClientInitializationError: ${category}`);
+    } else console.error(e instanceof Error ? e.name : "Server error");
     return Response.json(
       { error: "تعذر إتمام العملية. حاول لاحقاً." },
       { status: 500 },

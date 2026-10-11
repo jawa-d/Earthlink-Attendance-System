@@ -11,12 +11,21 @@ import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { RecordsTable, type Row } from "./records-table";
 import { DepartmentEditor, type Department } from "./department-editor";
-type List = { rows: Row[]; total: number; page: number };
+import { LeaderEditor, type TeamLeader } from "./leader-editor";
+import type { LeaderGroup } from "@/lib/leader-report";
+type List = {
+  rows: Row[];
+  total: number;
+  page: number;
+  groups?: LeaderGroup[];
+  historyIncomplete?: boolean;
+};
 type FormValues = {
   employeeNumber: string;
   fullName: string;
   normalizedEmail: string;
   departmentId: string;
+  teamLeaderId: string;
   status: string;
   employeeId: string;
   attendanceDate: string;
@@ -29,11 +38,21 @@ const titles: Record<string, string> = {
   reports: "التقارير والإحصائيات",
   "audit-logs": "سجل العمليات",
 };
-export function Management({ kind, role }: { kind: string; role: string }) {
+export function Management({
+  kind,
+  role,
+  initialTeamLeader = "",
+}: {
+  kind: string;
+  role: string;
+  initialTeamLeader?: string;
+}) {
   const client = useQueryClient();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [department, setDepartment] = useState("");
+  const [teamLeader, setTeamLeader] = useState(initialTeamLeader);
+  const [addingLeader, setAddingLeader] = useState(false);
   const [employee, setEmployee] = useState("");
   const [sort, setSort] = useState("fullName");
   const [start, setStart] = useState(businessDate());
@@ -51,12 +70,15 @@ export function Management({ kind, role }: { kind: string; role: string }) {
   const { register, reset, handleSubmit, setValue, control } =
     useForm<FormValues>();
   const selectedDepartment = useWatch({ control, name: "departmentId" }) || "";
+  const selectedLeader = useWatch({ control, name: "teamLeaderId" }) || "";
+  const selectedStatus = useWatch({ control, name: "status" });
   const writable =
     role !== "VIEWER" && kind !== "reports" && kind !== "audit-logs";
   const params = new URLSearchParams({
     q,
     status,
     department,
+    teamLeader,
     employee,
     sort,
     page: String(page),
@@ -66,13 +88,28 @@ export function Management({ kind, role }: { kind: string; role: string }) {
   });
   const query = useQuery({
     queryKey: [kind, params.toString()],
-    queryFn: () => api<List>(`/api/admin/${kind}?${params}`),
+    queryFn: () =>
+      api<List>(
+        `/api/admin/${kind === "reports" ? "team-leader-reports" : kind}?${params}`,
+      ),
   });
   const departments = useQuery({
     queryKey: ["departments"],
     queryFn: () => api<Department[]>("/api/admin/departments"),
   });
   const activeDepartments = departments.data?.filter((d) => d.isActive) || [];
+  const leaders = useQuery({
+    queryKey: ["team-leaders"],
+    queryFn: () => api<TeamLeader[]>("/api/admin/team-leaders"),
+    enabled: kind === "employees" || kind === "reports",
+  });
+  const availableLeaders =
+    leaders.data?.filter(
+      (l) => l.isActive && l.departmentId === selectedDepartment,
+    ) || [];
+  const leaderRequired =
+    selectedStatus === "ACTIVE" &&
+    !!leaders.data?.some((l) => l.departmentId === selectedDepartment);
   const choices = useQuery({
     queryKey: ["employee-choices"],
     queryFn: async () => {
@@ -92,7 +129,8 @@ export function Management({ kind, role }: { kind: string; role: string }) {
     enabled:
       !!view &&
       ["employees", "attendance", "reports"].includes(kind) &&
-      view.status !== "UNREGISTERED",
+      view.status !== "UNREGISTERED" &&
+      view.status !== "HISTORY_UNKNOWN",
   });
   const open = (r: Row | null) => {
     setEditing(r?.status === "UNREGISTERED" ? null : r);
@@ -101,6 +139,8 @@ export function Management({ kind, role }: { kind: string; role: string }) {
       fullName: r?.fullName || "",
       normalizedEmail: r?.normalizedEmail || "",
       departmentId: r?.departmentId || activeDepartments[0]?.id || "",
+      teamLeaderId:
+        r?.teamLeader?.isActive === false ? "" : r?.teamLeaderId || "",
       employeeId:
         r?.employeeId || r?.employee?.id || choices.data?.[0]?.id || "",
       status:
@@ -122,7 +162,7 @@ export function Management({ kind, role }: { kind: string; role: string }) {
     await client.invalidateQueries();
   };
   const exportUrl = (format: string) =>
-    `/api/admin/export?${new URLSearchParams({ kind, format, start, end, status, department, employee })}`;
+    `/api/admin/export?${new URLSearchParams({ kind, format, start, end, status, department, employee, teamLeader, ...(kind === "reports" ? { group: "team-leader" } : {}) })}`;
   return (
     <>
       <div className="mb-8 flex flex-wrap justify-between gap-4">
@@ -193,6 +233,61 @@ export function Management({ kind, role }: { kind: string; role: string }) {
           )}
         </div>
       </div>
+      {kind === "reports" && (
+        <>
+          <p className="muted mb-4 text-sm">
+            الحضور يشمل PRESENT وLATE بوقت تسجيل. الغياب يشمل ABSENT وعدم
+            التسجيل؛ بعذر مستقل. النسبة = أيام الحضور ÷ أيام الموظفين الفعالة.
+            فلتر الحالة يخص التفاصيل؛ الملخص يحتفظ بالمقام الكامل. إعادة التعيين
+            نافذة من يوم بغداد التالي.
+          </p>
+          {query.data?.historyIncomplete && (
+            <p
+              role="status"
+              className="mb-4 rounded-xl bg-amber-50 p-4 text-amber-900"
+            >
+              بعض الأيام تسبق سجل التوظيف والتعيين المؤكد؛ لا نحتسب غياباً
+              افتراضياً لها. الحضور المسجل محفوظ في التفاصيل.
+            </p>
+          )}
+          {!!query.data?.groups?.length && (
+            <div className="panel mb-6 overflow-x-auto">
+              <table>
+                <thead>
+                  <tr>
+                    {[
+                      "الليدر",
+                      "الموظفون (فريدون)",
+                      "أيام الموظفين",
+                      "حضور",
+                      "غياب / عدم تسجيل",
+                      "بعذر",
+                      "النسبة",
+                      "أيام مجهولة",
+                    ].map((h) => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {query.data.groups.map((g) => (
+                    <tr key={g.id}>
+                      <td>{g.name}</td>
+                      <td>{g.totalAssignedActiveEmployees}</td>
+                      <td>{g.employeeDays}</td>
+                      <td>{g.present}</td>
+                      <td>{g.absent}</td>
+                      <td>{g.excused}</td>
+                      <td>{g.percentage}%</td>
+                      <td>{g.unknownEmployeeDays}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
       <section className="panel overflow-hidden">
         <div className="flex flex-wrap gap-3 border-b border-slate-100 p-5">
           <div className="relative min-w-48 flex-1">
@@ -246,6 +341,28 @@ export function Management({ kind, role }: { kind: string; role: string }) {
                 ))}
               </select>
             </>
+          )}
+          {(kind === "employees" || kind === "reports") && (
+            <select
+              aria-label="الليدر المسؤول"
+              value={teamLeader}
+              className="max-w-44"
+              onChange={(e) => {
+                setTeamLeader(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">جميع الليدرية</option>
+              <option value="unassigned">بدون ليدر</option>
+              {leaders.data
+                ?.filter((l) => !department || l.departmentId === department)
+                .map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.fullName}
+                    {l.isActive ? "" : " (غير فعال)"}
+                  </option>
+                ))}
+            </select>
           )}
           {kind === "employees" ? (
             <select
@@ -453,6 +570,10 @@ export function Management({ kind, role }: { kind: string; role: string }) {
                   disabled={departments.isPending || !!departments.error}
                   {...register("departmentId")}
                   value={selectedDepartment}
+                  onChange={(e) => {
+                    register("departmentId").onChange(e);
+                    setValue("teamLeaderId", "", { shouldDirty: true });
+                  }}
                 >
                   <option value="">اختر القسم</option>
                   {activeDepartments.map((d) => (
@@ -484,6 +605,43 @@ export function Management({ kind, role }: { kind: string; role: string }) {
                   onClick={() => setAddingDepartment(true)}
                 >
                   + إضافة قسم
+                </Button>
+              )}
+              <Field label="الليدر المسؤول">
+                <select
+                  {...register("teamLeaderId")}
+                  value={selectedLeader}
+                  required={leaderRequired}
+                  disabled={leaders.isPending || !!leaders.error}
+                >
+                  <option value="">
+                    {leaderRequired ? "اختر الليدر المسؤول" : "بدون ليدر"}
+                  </option>
+                  {availableLeaders.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.fullName}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {leaders.isPending && <p role="status">جارٍ تحميل الليدرية…</p>}
+              {leaders.error && (
+                <p role="alert">تعذر تحميل الليدرية: {leaders.error.message}</p>
+              )}
+              {!leaders.isPending && availableLeaders.length === 0 && (
+                <p className="muted">
+                  لا يوجد ليدر فعال في القسم المختار. أضف ليدراً أو تواصل مع
+                  مسؤول النظام.
+                </p>
+              )}
+              {role !== "VIEWER" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!selectedDepartment}
+                  onClick={() => setAddingLeader(true)}
+                >
+                  + إضافة ليدر
                 </Button>
               )}
             </>
@@ -606,6 +764,12 @@ export function Management({ kind, role }: { kind: string; role: string }) {
               view?.employee?.department?.name || view?.department?.name,
             ],
             ["الحالة", statusNames[view?.status || ""]],
+            [
+              "الليدر المسؤول",
+              view?.teamLeaderName ||
+                view?.employee?.teamLeader?.fullName ||
+                view?.teamLeader?.fullName,
+            ],
             ["تاريخ الحضور", view?.attendanceDate?.slice(0, 10)],
             [
               "وقت الحضور",
@@ -628,7 +792,8 @@ export function Management({ kind, role }: { kind: string; role: string }) {
             ))}
         </dl>
         {["employees", "attendance", "reports"].includes(kind) &&
-          view?.status !== "UNREGISTERED" && (
+          view?.status !== "UNREGISTERED" &&
+          view?.status !== "HISTORY_UNKNOWN" && (
             <>
               <h3 className="my-4 font-bold">سجل التعديلات</h3>
               {history.data?.rows.map((r) => (
@@ -639,15 +804,28 @@ export function Management({ kind, role }: { kind: string; role: string }) {
             </>
           )}
       </Dialog>
-      <DepartmentEditor
-        open={addingDepartment}
-        onOpenChange={setAddingDepartment}
-        onCreated={(d) =>
-          setValue("departmentId", d.id, {
+      <LeaderEditor
+        key={selectedDepartment}
+        open={addingLeader}
+        onOpenChange={setAddingLeader}
+        departmentId={selectedDepartment}
+        onCreated={(l) =>
+          setValue("teamLeaderId", l.id, {
             shouldDirty: true,
             shouldValidate: true,
           })
         }
+      />
+      <DepartmentEditor
+        open={addingDepartment}
+        onOpenChange={setAddingDepartment}
+        onCreated={(d) => {
+          setValue("teamLeaderId", "");
+          setValue("departmentId", d.id, {
+            shouldDirty: true,
+            shouldValidate: true,
+          });
+        }}
       />
     </>
   );

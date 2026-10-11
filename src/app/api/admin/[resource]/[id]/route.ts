@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { departmentFields } from "@/lib/departments";
+import {
+  lockAssignments,
+  validateLeaderAssignment,
+  recordAssignment,
+} from "@/lib/team-leaders";
 import { authorize } from "@/lib/auth";
 import { handle, HttpError, sameOrigin } from "@/lib/http";
 import {
@@ -23,14 +28,28 @@ export async function PATCH(req: Request, ctx: Context) {
     const note = reason.parse(body.reason);
     return db.$transaction(async (tx) => {
       if (resource === "employees") {
+        await lockAssignments(tx);
         await tx.$queryRaw`SELECT id FROM "Employee" WHERE id=${id}::uuid FOR UPDATE`;
         const old = await tx.employee.findUnique({ where: { id } });
         if (!old || old.deletedAt) throw new HttpError(404, "غير موجود");
-        const data = employeeSchema.parse(body);
+        const parsed = employeeSchema.parse(body);
+        const data = {
+          ...parsed,
+          teamLeaderId:
+            parsed.teamLeaderId === undefined
+              ? old.teamLeaderId
+              : parsed.teamLeaderId,
+        };
         const department = await tx.department.findUnique({
           where: { id: data.departmentId },
         });
         if (!department?.isActive) throw new HttpError(400, "القسم غير فعال");
+        await validateLeaderAssignment(
+          tx,
+          data.departmentId,
+          data.status,
+          data.teamLeaderId,
+        );
         const row = await tx.employee.update({
           where: { id },
           data: {
@@ -41,7 +60,22 @@ export async function PATCH(req: Request, ctx: Context) {
                 : null,
           },
         });
-        await audit(tx, admin.id, "UPDATE", "Employee", id, old, row, note);
+        if (
+          old.teamLeaderId !== row.teamLeaderId ||
+          old.departmentId !== row.departmentId ||
+          old.status !== row.status
+        )
+          await recordAssignment(tx, row);
+        await audit(
+          tx,
+          admin.id,
+          old.teamLeaderId !== row.teamLeaderId ? "REASSIGN" : "UPDATE",
+          "Employee",
+          id,
+          old,
+          row,
+          note,
+        );
         return Response.json(row);
       }
       if (resource === "attendance") {
@@ -167,6 +201,7 @@ export async function DELETE(req: Request, ctx: Context) {
         );
       }
       if (resource === "employees") {
+        await lockAssignments(tx);
         await tx.$queryRaw`SELECT id FROM "Employee" WHERE id=${id}::uuid FOR UPDATE`;
         const old = await tx.employee.findUnique({ where: { id } });
         if (!old) throw new HttpError(404, "غير موجود");
@@ -178,6 +213,7 @@ export async function DELETE(req: Request, ctx: Context) {
             deactivatedAt: new Date(),
           },
         });
+        await recordAssignment(tx, row);
         await audit(tx, admin.id, "DELETE", "Employee", id, old, row, note);
         return Response.json({ ok: true });
       }

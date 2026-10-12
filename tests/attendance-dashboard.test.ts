@@ -3,10 +3,12 @@ const m = vi.hoisted(() => ({
   authorize: vi.fn(),
 
 
-  
+
   count: vi.fn(),
   records: vi.fn(),
   departments: vi.fn(),
+
+  
 }));
 vi.mock("@/lib/auth", () => ({ authorize: m.authorize }));
 vi.mock("@/lib/db", () => ({

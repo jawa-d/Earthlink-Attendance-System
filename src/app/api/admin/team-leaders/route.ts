@@ -1,3 +1,4 @@
+import { readJson } from "@/lib/request-body";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/auth";
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
     const admin = await authorize("write");
     const { reason: note, ...data } = leaderSchema
       .extend({ reason })
-      .parse(await req.json());
+      .parse(await readJson(req));
     return db.$transaction(async (tx) => {
       await lockAssignments(tx);
       const department = await tx.department.findUnique({

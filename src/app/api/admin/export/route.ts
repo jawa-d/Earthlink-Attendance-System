@@ -1,4 +1,7 @@
 import { getAttendanceList, attendanceFilters } from "@/lib/attendance-list";
+import { readImportForm } from "@/lib/request-body";
+import { validateXlsxArchive } from "@/lib/xlsx-safety";
+import { NO_SHIFT } from "@/lib/shift-display";
 import ExcelJS from "exceljs";
 import { authorize } from "@/lib/auth";
 import { handle, HttpError, sameOrigin } from "@/lib/http";
@@ -94,9 +97,11 @@ export async function GET(req: Request) {
     const leaderId = attendanceFilters(p).leader;
     const leader = leaderId && leaderId !== "unassigned" ? await db.teamLeader.findUnique({ where: { id: leaderId } }) : null;
     const title = "تقرير الحضور — Earthlink" + (leaderId ? " — الليدر المسؤول: " + (leader?.fullName || (leaderId === "unassigned" ? "بدون ليدر" : "غير معروف")) : "");
-    const rows = result.rows.map(r => [r.employee.employeeNumber, r.employee.fullName, r.employee.normalizedEmail, r.employee.department.name, r.attendanceDate.toISOString().slice(0, 10), r.checkInAt?.toLocaleTimeString("en-GB", { timeZone: "Asia/Baghdad" }) || "—", statusNames[r.status], r.registrationMethod || "—", r.teamLeaderName]);
+    const rows = result.rows.map(r => [r.employee.employeeNumber, r.employee.fullName, r.employee.normalizedEmail, r.employee.department.name, r.attendanceDate.toISOString().slice(0, 10), r.checkInAt?.toLocaleTimeString("en-GB", { timeZone: "Asia/Baghdad" }) || "—", statusNames[r.status], r.registrationMethod || "—", r.teamLeaderName,
+      r.shiftCodeSnapshot || "—", r.shiftNameSnapshot || NO_SHIFT, r.shiftStartTimeSnapshot || "—", r.shiftEndTimeSnapshot || "—", r.shiftBusinessDate?.toISOString().slice(0, 10) || "—"]);
+    const columns = [...headers, "الليدر المسؤول", "رمز الشفت", "اسم الشفت", "بداية الشفت (بغداد)", "نهاية الشفت (بغداد)", "تاريخ بداية الشفت"];
     const pdf = p.get("format") === "pdf";
-    const buffer = pdf ? await pdfReport(title, rows, undefined, [...headers, "الليدر المسؤول"]) : await spreadsheet(rows, title, [...headers, "الليدر المسؤول"]);
+    const buffer = pdf ? await pdfReport(title, rows, undefined, columns) : await spreadsheet(rows, title, columns);
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": pdf
@@ -112,13 +117,16 @@ export async function POST(req: Request) {
   return handle(async () => {
     sameOrigin(req);
     const admin = await authorize("write");
-    const form = await req.formData();
+    const form = await readImportForm(req);
     const note = reason.parse(form.get("reason"));
     const file = form.get("file");
     if (!(file instanceof File) || file.size > 2_000_000)
       throw new HttpError(400, "ملف Excel مطلوب، بحد أقصى 2MB");
     const book = new ExcelJS.Workbook();
-    await book.xlsx.load(Buffer.from(await file.arrayBuffer()) as never);
+    const bytes = Buffer.from(await file.arrayBuffer());
+    validateXlsxArchive(bytes);
+    try { await book.xlsx.load(bytes as never); }
+    catch { throw new HttpError(400, "ملف Excel غير صالح"); }
     const sheet = book.worksheets[0];
     if (!sheet || sheet.rowCount > 501)
       throw new HttpError(400, "الحد الأقصى 500 موظف");

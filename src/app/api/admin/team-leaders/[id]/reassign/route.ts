@@ -1,3 +1,4 @@
+import { readJson } from "@/lib/request-body";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/auth";
@@ -20,7 +21,7 @@ export async function POST(
         deactivateSource: z.boolean().default(false),
         reason,
       })
-      .parse(await req.json());
+      .parse(await readJson(req));
     if (id === data.targetLeaderId) throw new HttpError(400, "اختر ليدراً آخر");
     return db.$transaction(
       async (tx) => {

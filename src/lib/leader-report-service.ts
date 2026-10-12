@@ -3,6 +3,7 @@ import { db } from "./db";
 import { buildLeaderReport } from "./leader-report";
 import { businessDate, dateValue } from "./validation";
 import { HttpError } from "./http";
+import { shiftFilter } from "./shifts";
 export async function getLeaderReport(p: URLSearchParams) {
   const start = dateValue(p.get("start") || businessDate());
   const end = dateValue(p.get("end") || p.get("start") || businessDate());
@@ -34,6 +35,7 @@ export async function getLeaderReport(p: URLSearchParams) {
         .parse(p.get("status"))
     : undefined;
   const q = (p.get("q") || "").slice(0, 120);
+  const shift = shiftFilter(p.get("shift"));
   const [employees, leaders] = await Promise.all([
     db.employee.findMany({
       where: {
@@ -59,7 +61,7 @@ export async function getLeaderReport(p: URLSearchParams) {
           orderBy: { effectiveFrom: "asc" },
         },
         attendance: {
-          where: { deletedAt: null, attendanceDate: { gte: start, lte: end } },
+          where: { deletedAt: null, attendanceDate: { gte: start, lte: end }, ...(shift ? { shiftId: shift === "none" ? null : shift } : {}) },
         },
       },
       orderBy: { fullName: "asc" },
@@ -72,5 +74,6 @@ export async function getLeaderReport(p: URLSearchParams) {
     department,
     teamLeader,
     status,
+    shift,
   });
 }

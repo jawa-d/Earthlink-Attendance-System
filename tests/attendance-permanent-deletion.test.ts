@@ -76,6 +76,17 @@ beforeEach(() => {
   m.auditMany.mockResolvedValue({ count: 2 });
 });
 describe("permanent attendance deletion with Excel consent (mock database only)", () => {
+  it("preserves the supported 5000 UUID selection within its bounded JSON budget", async () => {
+    const template = records()[0];
+    const fixture = Array.from({ length: 5000 }, (_, i) => ({ ...template, id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}` }));
+    m.find.mockResolvedValue(fixture);
+    const snapshot = await prepare({ ids: fixture.map(r => r.id) });
+    expect(snapshot.count).toBe(5000); expect(m.remove).not.toHaveBeenCalled();
+  });
+  it("rejects a deletion request above 256 KiB before snapshot or attendance work", async () => {
+    const response = await POST(request("POST", { action: "prepare", extra: "x".repeat(256 * 1024), selection: { ids: [first] } }));
+    expect(response.status).toBe(413); expect(m.find).not.toHaveBeenCalled(); expect(m.remove).not.toHaveBeenCalled();
+  });
   it("creates an exact snapshot without deleting anything; code is hashed at rest", async () => {
     const snapshot = await prepare();
     expect(snapshot.count).toBe(2);

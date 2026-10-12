@@ -1,3 +1,4 @@
+import { readJson } from "@/lib/request-body";
 import { getAttendanceList } from "@/lib/attendance-list";
 import { z } from "zod";
 import { hash } from "@node-rs/argon2";
@@ -18,8 +19,10 @@ import {
   dateValue,
   employeeSchema,
   reason,
+  pageNumber,
 } from "@/lib/validation";
 import { audit } from "@/lib/service";
+import { attendanceShift, shiftStatistics } from "@/lib/shifts";
 type Context = { params: Promise<{ resource: string }> };
 export async function GET(req: Request, ctx: Context) {
   return handle(async () => {
@@ -30,7 +33,7 @@ export async function GET(req: Request, ctx: Context) {
         : "read",
     );
     const p = new URL(req.url).searchParams;
-    const page = Math.max(1, Number(p.get("page")) || 1);
+    const page = pageNumber(p);
     const take = 25;
     const q = (p.get("q") || "").slice(0, 120);
     const departmentId = p.get("department") || undefined;
@@ -242,6 +245,7 @@ export async function GET(req: Request, ctx: Context) {
       });
       return Response.json({
         employees,
+        shifts: shiftStatistics(activeRows),
         registered: uniqueDays.filter((day) => day.firstCheckInAt).length,
         unregistered: Math.max(0, employees - uniqueDays.length),
         counts,
@@ -277,7 +281,7 @@ export async function POST(req: Request, ctx: Context) {
         ? "super"
         : "write",
     );
-    const body = await req.json();
+    const body = await readJson(req);
     return db.$transaction(async (tx) => {
       if (resource === "employees") {
         await lockAssignments(tx);
@@ -319,6 +323,8 @@ export async function POST(req: Request, ctx: Context) {
         });
         if (!employee || employee.deletedAt)
           throw new HttpError(400, "الموظف غير متاح");
+        const shift = await attendanceShift(tx, data.shiftId, employee.departmentId,
+          data.checkInAt ? new Date(data.checkInAt) : new Date(`${data.attendanceDate}T23:59:00+03:00`));
         const row = await tx.attendanceRecord.create({
           data: {
             employeeId: data.employeeId,
@@ -329,6 +335,7 @@ export async function POST(req: Request, ctx: Context) {
             registrationMethod: "ADMIN",
             createdByAdminId: admin.id,
             modificationReason: data.reason,
+            ...shift,
           },
         });
         await audit(
@@ -393,7 +400,7 @@ export async function POST(req: Request, ctx: Context) {
         const data = z
           .object({
             name: z.string().min(2).max(120),
-            email: z.email().toLowerCase(),
+            email: z.email().max(254).toLowerCase(),
             password: z.string().min(14).max(256),
             role: z.enum(["SUPER_ADMIN", "ADMIN", "VIEWER"]),
             reason,

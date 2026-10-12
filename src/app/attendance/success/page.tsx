@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-type Result = { name: string; email: string; date: string; checkInAt: string };
+type Result = { name: string; email: string; date: string; checkInAt: string; shiftLabel?: string };
 export default function Success() {
   const [result, setResult] = useState<Result | null>(null);
   useEffect(() => {
@@ -23,6 +23,7 @@ export default function Success() {
               {result.email}
             </p>
             <p>{result.date}</p>
+            {result.shiftLabel && <p>{result.shiftLabel}</p>}
             <p>
               {new Date(result.checkInAt).toLocaleTimeString("ar-IQ", {
                 timeZone: "Asia/Baghdad",

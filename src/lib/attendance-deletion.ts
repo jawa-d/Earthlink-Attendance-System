@@ -112,6 +112,7 @@ export async function exportDeletionBackup(actor: Actor, sessionId: string, id: 
       "معرف الليدر التاريخي", "معرف القسم التاريخي", "وقت الحضور UTC", "وقت الحضور الأصلي UTC",
       "وقت التسجيل UTC", "طريقة التسجيل", "معرف المسؤول المسجل", "سبب التعديل",
       "وقت الحذف القابل للاستعادة UTC", "وقت الإنشاء UTC", "آخر تعديل UTC",
+      "رمز الشفت", "اسم الشفت", "بداية الشفت (بغداد)", "نهاية الشفت (بغداد)", "تاريخ بداية الشفت", "بداية الشفت UTC", "نهاية الشفت UTC",
     ]);
     records.forEach(r => sheet.addRow([
       r.employeeName, r.employeeNumber, r.email, r.departmentName, r.teamLeaderName,
@@ -120,10 +121,11 @@ export async function exportDeletionBackup(actor: Actor, sessionId: string, id: 
       statusNames[r.status] || r.status, r.id, r.employeeId, r.teamLeaderId, r.historicalDepartmentId,
       r.checkInAt, r.originalCheckInAt, r.registeredAt, r.registrationMethod, r.createdByAdminId,
       r.modificationReason, r.deletedAt, r.createdAt, r.updatedAt,
+      r.shiftCodeSnapshot, r.shiftNameSnapshot || "بدون شفت", r.shiftStartTimeSnapshot, r.shiftEndTimeSnapshot, r.shiftBusinessDate, r.shiftStartsAt, r.shiftEndsAt,
     ]));
     sheet.getRow(2).font = { bold: true };
     sheet.columns.forEach(c => { c.width = 28; });
-    sheet.autoFilter = "A2:U2";
+    sheet.autoFilter = "A2:AB2";
     const buffer = Buffer.from(await book.xlsx.writeBuffer());
     const updated = await tx.attendanceDeletionSnapshot.update({ where: { id }, data: {
       exportedAt: new Date(), fileHash: createHash("sha256").update(buffer).digest("hex"),

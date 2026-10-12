@@ -1,5 +1,9 @@
 # Earthlink Attendance System
 
+Shift module: [implementation](docs/SHIFT-MANAGEMENT.md), [migration/deployment checklist](docs/SHIFTS-DEPLOYMENT.md), and [test results](docs/SHIFT-TEST-RESULTS.md). `/admin/shifts` manages the catalog; set server `ATTENDANCE_SHIFTS_ENABLED=true` only after the additive migration, catalog setup and rollout are approved. Older attendance remains **بدون شفت**. No shift migration or deployment has been executed by this implementation.
+
+Current security review (2026-10-12): [audit report](SECURITY_AUDIT_REPORT.md), [local fixes and approval-dependent plans](SECURITY_FIXES.md), [verification results](SECURITY_TEST_RESULTS.md), [production hardening](PRODUCTION_HARDENING_CHECKLIST.md), and [future VPS checklist](VPS_SECURITY_CHECKLIST.md). **NOT READY FOR SECURITY APPROVAL:** High findings remain open. Local audit fixes have not been deployed. This review supersedes the older SECURITY_AUDIT.md assessment.
+
 An Arabic-first internal departmental attendance application. Next.js App Router, React, TypeScript, Tailwind, shadcn-style Radix components, TanStack Query, React Hook Form, Prisma and PostgreSQL. This is separate from the company's fingerprint infrastructure.
 
 ## Local setup (PowerShell)

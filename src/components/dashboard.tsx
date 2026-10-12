@@ -39,6 +39,7 @@ type Dashboard = {
   rows: Row[];
   trends: { date: string; total: number }[];
   departments: { name: string; total: number }[];
+  shifts?: { id: string; label: string; events: number; registeredEmployees: number }[];
 };
 export function Dashboard({ preview = false }: { preview?: boolean }) {
   const [date, setDate] = useState(businessDate());
@@ -247,6 +248,11 @@ export function Dashboard({ preview = false }: { preview?: boolean }) {
           </div>
         </section>
       )}
+      <section className="panel mt-6 overflow-x-auto p-6">
+        <h2 className="mb-4 font-semibold">الحضور حسب الشفت</h2>
+        <p className="muted mb-4 text-xs">كل موظف يُحتسب مرة داخل كل شفت؛ مجموع الشفتات قد يزيد عن إجمالي الموظفين إذا سجّل الموظف أكثر من حدث.</p>
+        {d?.shifts?.length ? <table><thead><tr><th>الشفت</th><th>أحداث الحضور</th><th>موظفون سجّلوا الحضور</th></tr></thead><tbody>{d.shifts.map(s => <tr key={`${s.id}-${s.label}`}><td>{s.label}</td><td>{s.events}</td><td>{s.registeredEmployees}</td></tr>)}</tbody></table> : <p className="muted">لا توجد سجلات للشفتات في التاريخ المحدد.</p>}
+      </section>
       <p className="muted mt-5 text-[10px]">
         عدم التسجيل لا يعني الغياب. جميع الحالات الإدارية تُعيّن يدوياً.
       </p>

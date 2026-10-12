@@ -1,3 +1,4 @@
+import { readJson } from "@/lib/request-body";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/auth";
@@ -14,7 +15,7 @@ export async function PATCH(req: Request, ctx: Context) {
     z.uuid().parse(id);
     const { reason: note, ...data } = leaderSchema
       .extend({ reason })
-      .parse(await req.json());
+      .parse(await readJson(req));
     return db.$transaction(async (tx) => {
       await lockAssignments(tx);
       const old = await tx.teamLeader.findUnique({ where: { id } });

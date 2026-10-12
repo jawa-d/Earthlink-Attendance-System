@@ -10,19 +10,21 @@ export class HttpError extends Error {
 }
 export async function handle(fn: () => Promise<Response>) {
   try {
-    return await fn();
+    const response = await fn();
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (e) {
     if (e instanceof SyntaxError)
-      return Response.json({ error: "طلب JSON غير صالح" }, { status: 400 });
+      return Response.json({ error: "طلب JSON غير صالح" }, { status: 400, headers: { "Cache-Control": "private, no-store" } });
     if (e instanceof HttpError)
-      return Response.json({ error: e.message }, { status: e.status });
+      return Response.json({ error: e.message }, { status: e.status, headers: { "Cache-Control": "private, no-store" } });
     if (e instanceof ZodError)
       return Response.json(
         { error: "يرجى مراجعة البيانات المدخلة", details: e.issues },
-        { status: 400 },
+        { status: 400, headers: { "Cache-Control": "private, no-store" } },
       );
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
-      return Response.json({ error: "السجل موجود مسبقاً" }, { status: 409 });
+      return Response.json({ error: "السجل موجود مسبقاً" }, { status: 409, headers: { "Cache-Control": "private, no-store" } });
     // Classify initialization failures without logging connection strings or messages.
     if (e instanceof Prisma.PrismaClientInitializationError) {
       const category = /Environment variable not found/.test(e.message)
@@ -36,13 +38,21 @@ export async function handle(fn: () => Promise<Response>) {
     } else console.error(e instanceof Error ? e.name : "Server error");
     return Response.json(
       { error: "تعذر إتمام العملية. حاول لاحقاً." },
-      { status: 500 },
+      { status: 500, headers: { "Cache-Control": "private, no-store" } },
     );
   }
 }
 export function sameOrigin(req: Request) {
-  const expected = new URL(process.env.APP_URL || "http://localhost:3000")
-    .origin;
+  const configured = process.env.APP_URL;
+  if (process.env.NODE_ENV === "production" && !configured)
+    throw new HttpError(503, "إعداد رابط التطبيق غير مكتمل");
+  let url: URL;
+  try { url = new URL(configured || "http://localhost:3000"); }
+  catch { throw new HttpError(503, "إعداد رابط التطبيق غير صالح"); }
+  if (url.username || url.password || !["http:", "https:"].includes(url.protocol) ||
+    (process.env.NODE_ENV === "production" && url.protocol !== "https:"))
+    throw new HttpError(503, "إعداد رابط التطبيق غير صالح");
+  const expected = url.origin;
   if (req.headers.get("origin") !== expected)
     throw new HttpError(403, "طلب غير مسموح");
 }

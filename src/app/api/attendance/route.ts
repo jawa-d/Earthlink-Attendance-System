@@ -1,3 +1,4 @@
+import { readJson } from "@/lib/request-body";
 import { handle, sameOrigin } from "@/lib/http";
 import { registerAttendance } from "@/lib/service";
 import { rateLimit } from "@/lib/auth";
@@ -7,12 +8,14 @@ import { issueAttendanceReceipt } from "@/lib/attendance-receipt";
 export async function POST(req: Request) {
   return handle(async () => {
     sameOrigin(req);
-    const body = await req.json();
+    const body = await readJson(req);
     const email = corporateEmail.parse(body.email);
     await rateLimit(`attendance:${email}`, 8, 10);
     await rateLimit("attendance:global", 600, 10);
     try {
-      const { employeeId, ...result } = await registerAttendance(email);
+      const { employeeId, ...result } = body.shiftId === undefined
+        ? await registerAttendance(email)
+        : await registerAttendance(email, undefined, body.shiftId);
       await issueAttendanceReceipt(employeeId);
       return Response.json(result, {
         status: 201,

@@ -1,12 +1,13 @@
 import { authorize } from "@/lib/auth";
 import { handle } from "@/lib/http";
 import { getLeaderReport } from "@/lib/leader-report-service";
+import { pageNumber } from "@/lib/validation";
 export async function GET(req: Request) {
   return handle(async () => {
     await authorize("read");
     const p = new URL(req.url).searchParams;
+    const page = pageNumber(p);
     const result = await getLeaderReport(p);
-    const page = Math.max(1, Math.floor(Number(p.get("page")) || 1));
     return Response.json(
       {
         ...result,

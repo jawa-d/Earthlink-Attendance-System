@@ -14,6 +14,8 @@ import { DepartmentEditor, type Department } from "./department-editor";
 import { LeaderEditor, type TeamLeader } from "./leader-editor";
 import type { LeaderGroup } from "@/lib/leader-report";
 import { AttendancePermanentDelete } from "./attendance-permanent-delete";
+import type { ShiftList } from "./shifts-page";
+import { shiftChoiceLabel, shiftHistoryLabel } from "@/lib/shift-display";
 type List = {
   rows: Row[];
   total: number;
@@ -22,6 +24,7 @@ type List = {
   historyIncomplete?: boolean;
 };
 type FormValues = {
+  shiftId: string;
   employeeNumber: string;
   fullName: string;
   normalizedEmail: string;
@@ -55,6 +58,7 @@ export function Management({
   const [teamLeader, setTeamLeader] = useState(initialTeamLeader);
   const [addingLeader, setAddingLeader] = useState(false);
   const [employee, setEmployee] = useState("");
+  const [shift, setShift] = useState("");
   const [sort, setSort] = useState("fullName");
   const [start, setStart] = useState(businessDate());
   const [end, setEnd] = useState(businessDate());
@@ -74,6 +78,7 @@ export function Management({
   const selectedDepartment = useWatch({ control, name: "departmentId" }) || "";
   const selectedLeader = useWatch({ control, name: "teamLeaderId" }) || "";
   const selectedStatus = useWatch({ control, name: "status" });
+  const selectedEmployee = useWatch({ control, name: "employeeId" });
   const writable =
     role !== "VIEWER" && kind !== "reports" && kind !== "audit-logs";
   const params = new URLSearchParams({
@@ -82,6 +87,7 @@ export function Management({
     department,
     ...(kind === "attendance" ? { teamLeaderId: teamLeader } : { teamLeader }),
     employee,
+    shift,
     sort,
     page: String(page),
     start,
@@ -100,6 +106,19 @@ export function Management({
     queryFn: () => api<Department[]>("/api/admin/departments"),
   });
   const activeDepartments = departments.data?.filter((d) => d.isActive) || [];
+  const shifts = useQuery({
+    queryKey: ["shifts", "choices"],
+    enabled: kind === "attendance" || kind === "reports",
+    queryFn: async ({ signal }) => {
+      const rows: ShiftList["rows"] = [];
+      let page = 1, latest: ShiftList;
+      do {
+        latest = await api<ShiftList>(`/api/admin/shifts?limit=1000&page=${page++}`, { signal });
+        rows.push(...latest.rows);
+      } while (latest.rows.length && rows.length < latest.total);
+      return { ...latest, rows };
+    },
+  });
   const leaders = useQuery({
     queryKey: ["team-leaders"],
     queryFn: () => api<TeamLeader[]>("/api/admin/team-leaders"),
@@ -138,6 +157,7 @@ export function Management({
     setEditing(r?.status === "UNREGISTERED" ? null : r);
     reset({
       employeeNumber: r?.employeeNumber || "",
+      shiftId: "",
       fullName: r?.fullName || "",
       normalizedEmail: r?.normalizedEmail || "",
       departmentId: r?.departmentId || activeDepartments[0]?.id || "",
@@ -163,8 +183,10 @@ export function Management({
   const refresh = async () => {
     await client.invalidateQueries();
   };
+  const shiftDepartment = choices.data?.find(e => e.id === selectedEmployee)?.departmentId;
+  const allowedShifts = shifts.data?.rows.filter(s => s.isActive && (!s.departments.length || s.departments.some(d => d.departmentId === shiftDepartment))) || [];
   const exportUrl = (format: string) =>
-    `/api/admin/export?${new URLSearchParams({ kind, format, start, end, status, department, employee, q, deleted: String(deleted), ...(kind === "attendance" ? { teamLeaderId: teamLeader } : { teamLeader }), ...(kind === "reports" ? { group: "team-leader" } : {}) })}`;
+    `/api/admin/export?${new URLSearchParams({ kind, format, start, end, status, department, employee, q, shift, deleted: String(deleted), ...(kind === "attendance" ? { teamLeaderId: teamLeader } : { teamLeader }), ...(kind === "reports" ? { group: "team-leader" } : {}) })}`;
   return (
     <>
       <div className="mb-8 flex flex-wrap justify-between gap-4">
@@ -259,6 +281,7 @@ export function Management({
               افتراضياً لها. الحضور المسجل محفوظ في التفاصيل.
             </p>
           )}
+          {shift && <p role="status" className="muted mb-4 text-sm">عند اختيار شفت، تُحسب أيام الموظفين التي لها سجلات مطابقة فقط. لا يُستنتج غياب أو عدم تسجيل لشفت دون جدول تعيين للموظفين.</p>}
           {!!query.data?.groups?.length && (
             <div className="panel mb-6 overflow-x-auto">
               <table>
@@ -373,6 +396,7 @@ export function Management({
                 ))}
             </select>
           )}
+          {["reports", "attendance"].includes(kind) && <label>الشفت<select aria-label="الشفت" className="max-w-52" value={shift} onChange={e => { setShift(e.target.value); setPage(1); }}><option value="">جميع الشفتات</option><option value="none">بدون شفت</option>{shifts.data?.rows.map(s => <option key={s.id} value={s.id}>{s.code} — {s.name}{s.isActive ? "" : " (غير فعال)"}</option>)}</select></label>}
           {kind === "employees" ? (
             <select
               aria-label="الترتيب"
@@ -443,6 +467,8 @@ export function Management({
           </Button>
         </div>
         {kind === "attendance" && leaders.isLoading && <p role="status" className="p-4">جارٍ تحميل الليدرية…</p>}
+        {["attendance", "reports"].includes(kind) && shifts.error && <p role="alert" className="p-4">تعذر تحميل خيارات الشفتات. <button type="button" onClick={() => shifts.refetch()}>إعادة المحاولة</button></p>}
+        {kind === "attendance" && status === "UNREGISTERED" && shift && shift !== "none" && <p role="status" className="p-4">لا يوجد جدول تعيين موظفين للشفتات لاستنتاج عدم التسجيل؛ اختر جميع الشفتات لعرض الموظفين الذين لم يسجلوا.</p>}
         {kind === "attendance" && leaders.isError && <p role="alert" className="p-4">تعذر تحميل الليدرية. <button onClick={() => leaders.refetch()}>إعادة المحاولة</button></p>}
         {query.isLoading ? (
           <div className="space-y-3 p-6">
@@ -457,7 +483,7 @@ export function Management({
         ) : (
           <RecordsTable
             rows={query.data?.rows || []}
-            kind={kind === "reports" ? "attendance" : kind}
+            kind={kind}
             onPermanentlyDelete={kind === "attendance" && role === "SUPER_ADMIN" ? r => setPermanentSelection({ ids: [r.id] }) : undefined}
             onView={(r) => setView(r)}
             onEdit={writable ? (r) => open(r) : undefined}
@@ -527,6 +553,7 @@ export function Management({
                       attendanceDate: data.attendanceDate,
                       status: data.status,
                       reason: data.reason,
+                      ...(!editing && data.shiftId ? { shiftId: data.shiftId } : {}),
                       ...(editing &&
                       data.attendanceDate ===
                         editing.attendanceDate?.slice(0, 10) &&
@@ -665,7 +692,7 @@ export function Management({
           ) : (
             <>
               <Field label="الموظف">
-                <select required {...register("employeeId")}>
+                <select required {...register("employeeId")} onChange={e => { void register("employeeId").onChange(e); setValue("shiftId", ""); }}>
                   {choices.data?.map((e) => (
                     <option key={e.id} value={e.id}>
                       {e.fullName}
@@ -673,6 +700,8 @@ export function Management({
                   ))}
                 </select>
               </Field>
+              {editing ? <p className="muted text-sm">الشفت المسجل: {shiftHistoryLabel(editing)}</p> : <Field label="الشفت"><select aria-label="شفت سجل الحضور" {...register("shiftId")} required={shifts.data?.attendanceEnabled} disabled={shifts.isPending || !!shifts.error}><option value="">{shifts.data?.attendanceEnabled ? "اختر الشفت" : "بدون شفت"}</option>{allowedShifts.map(s => <option key={s.id} value={s.id}>{shiftChoiceLabel(s)}</option>)}</select></Field>}
+              {!editing && shifts.error && <p role="alert">تعذر تحميل الشفتات. <button type="button" onClick={() => shifts.refetch()}>إعادة المحاولة</button></p>}
               <div className="grid grid-cols-2 gap-4">
                 <Field label="التاريخ">
                   <input type="date" required {...register("attendanceDate")} />
@@ -703,7 +732,7 @@ export function Management({
               {...register("reason")}
             />
           </Field>
-          <Button disabled={busy}>
+          <Button disabled={busy || (kind === "attendance" && !editing && (shifts.isPending || !!shifts.error))}>
             {busy ? "جاري الحفظ…" : "حفظ التغييرات"}
           </Button>
         </form>

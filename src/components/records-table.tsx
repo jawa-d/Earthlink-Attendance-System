@@ -1,7 +1,15 @@
 "use client";
 import { Button } from "./ui/button";
 import { statusNames } from "@/lib/export-labels";
+import { shiftScheduleLabel } from "@/lib/shift-display";
 export type Row = {
+  shiftId?: string | null;
+  shiftCodeSnapshot?: string | null;
+  shiftNameSnapshot?: string | null;
+  shiftStartTimeSnapshot?: string | null;
+  shiftEndTimeSnapshot?: string | null;
+  shiftLabels?: string[];
+  shiftBusinessDate?: string | null;
   id: string;
   employeeNumber?: string;
   fullName?: string;
@@ -73,6 +81,7 @@ export function RecordsTable({
                     "القسم",
                     "الليدر المسؤول",
                     "التاريخ",
+                    "الشفت",
                     kind === "reports" ? "أول حضور" : "وقت الحضور",
                     ...(kind === "reports" ? ["آخر حضور", "عدد الأحداث"] : []),
                     "الحالة",
@@ -135,6 +144,7 @@ export function RecordsTable({
                     {kind !== "employees" && (
                       <>
                         <td>{r.attendanceDate?.slice(0, 10)}</td>
+                        <td>{r.shiftLabels?.length ? r.shiftLabels.join("؛ ") : shiftScheduleLabel(r)}</td>
                         <td>
                           {r.checkInAt
                             ? new Date(r.checkInAt).toLocaleTimeString(

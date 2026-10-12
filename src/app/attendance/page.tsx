@@ -1,5 +1,5 @@
 "use client";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { QrCode, ArrowLeft, ShieldCheck } from "lucide-react";
@@ -9,13 +9,21 @@ import { useAttendanceCooldown } from "@/components/use-attendance-cooldown";
 import { AttendanceCountdown } from "@/components/attendance-countdown";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useAttendanceShifts } from "@/components/use-attendance-shifts";
+import { shiftChoiceLabel } from "@/lib/shift-display";
 export default function Attendance() {
   const router = useRouter();
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { isSubmitting },
-  } = useForm<{ email: string }>();
+  } = useForm<{ email: string; shiftId: string }>({ defaultValues: { email: "", shiftId: "" } });
+  const email = useWatch({ control, name: "email" });
+  const shiftId = useWatch({ control, name: "shiftId" });
+  const shifts = useAttendanceShifts(email);
+  const shiftBlocked = shifts.loading || !!shifts.error || (shifts.enabled && !shifts.options.some(s => s.id === shiftId));
   const [error, setError] = useState("");
   const cooldown = useAttendanceCooldown();
   return (
@@ -38,7 +46,7 @@ export default function Attendance() {
           </p>
           <form
             onSubmit={handleSubmit(async (values) => {
-              if (cooldown.blocked) return;
+              if (cooldown.blocked || shiftBlocked) return;
               setError("");
               const parsed = corporateEmail.safeParse(values.email);
               if (!parsed.success) {
@@ -50,7 +58,7 @@ export default function Attendance() {
               try {
                 const result = await api("/api/attendance", {
                   method: "POST",
-                  body: JSON.stringify({ email: parsed.data }),
+                  body: JSON.stringify({ email: parsed.data, ...(shifts.enabled ? { shiftId: values.shiftId } : {}) }),
                 });
                 sessionStorage.setItem(
                   "attendance-result",
@@ -68,7 +76,13 @@ export default function Attendance() {
                     nextAllowedAt: e.data.nextAllowedAt,
                     serverNow: e.data.serverNow,
                   });
-                else setError((e as Error).message);
+                else {
+                  setError((e as Error).message);
+                  if (e instanceof ApiError && e.status === 400 && shifts.enabled) {
+                    setValue("shiftId", "");
+                    void shifts.refresh();
+                  }
+                }
               }
             })}
           >
@@ -82,14 +96,23 @@ export default function Attendance() {
               required
               maxLength={254}
               {...register("email")}
+              onChange={e => { void register("email").onChange(e); setValue("shiftId", ""); }}
             />
+            <label htmlFor="shift" className="mt-5">الشفت</label>
+            <select id="shift" required={shifts.enabled} disabled={!shifts.enabled || shifts.loading || !!shifts.error} {...register("shiftId")}>
+              <option value="">{shifts.loading ? "جارٍ تحميل الشفتات…" : "اختر الشفت"}</option>
+              {shifts.options.map(s => <option key={s.id} value={s.id}>{shiftChoiceLabel(s)}</option>)}
+            </select>
+            {!shifts.enabled && !shifts.loading && !shifts.error && <p className="muted mt-2 text-xs">لا يلزم اختيار شفت حالياً.</p>}
+            {shifts.enabled && email && !shifts.loading && !shifts.options.length && !shifts.error && <p role="status" className="mt-2 text-xs">أدخل بريدك الوظيفي الصحيح؛ إذا لم تظهر شفتات متاحة فتواصل مع مسؤول القسم.</p>}
+            {shifts.error && <div className="mt-2"><p role="alert" className="text-xs text-red-600">تعذر تحميل الشفتات. أعد المحاولة.</p><Button type="button" variant="outline" onClick={() => void shifts.refresh()}>إعادة تحميل الشفتات</Button></div>}
             {error && (
               <p role="alert" className="mt-3 text-sm text-red-600">
                 {error}
               </p>
             )}
             <Button
-              disabled={isSubmitting || cooldown.blocked}
+              disabled={isSubmitting || cooldown.blocked || shiftBlocked}
               className="mt-5 w-full"
             >
               {isSubmitting ? "جاري التسجيل…" : "تسجيل الحضور"}

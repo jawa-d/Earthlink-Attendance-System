@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { reportOperatorFailure } from "./operator-error";
 import { db } from "../src/lib/db";
 async function main() {
   if (process.env.NODE_ENV === "production")
@@ -24,8 +25,5 @@ async function main() {
   );
 }
 main()
-  .catch((e) => {
-    console.error(e.message);
-    process.exitCode = 1;
-  })
+  .catch(reportOperatorFailure)
   .finally(() => db.$disconnect());

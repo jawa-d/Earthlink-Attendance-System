@@ -1,3 +1,5 @@
+import { readJson } from "@/lib/request-body";
+import { securityEvent } from "@/lib/security-events";
 import { verify } from "@node-rs/argon2";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -8,10 +10,10 @@ export async function POST(req: Request) {
     sameOrigin(req);
     const { email, password } = z
       .object({
-        email: z.email().toLowerCase(),
+        email: z.email().max(254).toLowerCase(),
         password: z.string().min(1).max(256),
       })
-      .parse(await req.json());
+      .parse(await readJson(req));
     await rateLimit(`login:${email}`, 5, 15);
     await rateLimit("login:global", 100, 15);
     const admin = await db.adminUser.findUnique({ where: { email } });
@@ -20,9 +22,12 @@ export async function POST(req: Request) {
     const ok = await verify(admin?.passwordHash || dummy, password).catch(
       () => false,
     );
-    if (!admin || !admin.isActive || !ok)
+    if (!admin || !admin.isActive || !ok) {
+      securityEvent("LOGIN_FAILURE", email);
       throw new HttpError(401, "بيانات الدخول غير صحيحة");
+    }
     await createSession(admin.id);
+    securityEvent("LOGIN_SUCCESS", admin.id);
     return Response.json({ ok: true });
   });
 }

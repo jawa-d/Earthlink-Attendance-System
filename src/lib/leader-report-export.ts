@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { pdfReport } from "./export";
 import { statusNames } from "./export-labels";
 import type { LeaderGroup, LeaderReportRow } from "./leader-report";
+import { NO_SHIFT } from "./shift-display";
 export const leaderDetailHeaders = [
   "الليدر",
   "القسم",
@@ -15,6 +16,7 @@ export const leaderDetailHeaders = [
   "أول حضور",
   "آخر حضور",
   "عدد الأحداث",
+  "الشفتات المسجلة (الرمز / الاسم / الأوقات)",
 ];
 export function leaderDetailRows(rows: LeaderReportRow[]) {
   return rows.map((r) => [
@@ -39,6 +41,7 @@ export function leaderDetailRows(rows: LeaderReportRow[]) {
       timeZone: "Asia/Baghdad",
     }) || "—",
     String(r.eventCount),
+    r.shiftLabels?.length ? r.shiftLabels.join("؛ ") : NO_SHIFT,
   ]);
 }
 export async function exportLeaderReport(
@@ -61,6 +64,7 @@ export async function exportLeaderReport(
         `حضور ${g.present} / غياب ${g.absent} / بعذر ${g.excused}`,
         `${g.percentage}%`,
         `أيام موظفين ${g.employeeDays}; مجهولة ${g.unknownEmployeeDays}`,
+        "",
         "",
         "",
         "",

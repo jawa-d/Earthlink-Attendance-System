@@ -4,6 +4,8 @@ import { businessDate, corporateEmail } from "./validation";
 import { HttpError } from "./http";
 import { AttendanceCooldownError, cooldownTimes } from "./attendance-cooldown";
 import { lastSuccessfulAttendance } from "./attendance-last-success";
+import { attendanceShift } from "./shifts";
+import { shiftHistoryLabel } from "./shift-display";
 export async function audit(
   tx: Prisma.TransactionClient,
   actorAdminId: string,
@@ -28,7 +30,7 @@ export async function audit(
     },
   });
 }
-export async function registerAttendance(input: unknown, testNow?: Date) {
+export async function registerAttendance(input: unknown, testNow?: Date, shiftId?: unknown) {
   const email = corporateEmail.parse(input);
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Employee" WHERE "normalizedEmail"=${email} FOR UPDATE`;
@@ -49,6 +51,7 @@ export async function registerAttendance(input: unknown, testNow?: Date) {
       if (now.getTime() < Date.parse(times.nextAllowedAt))
         throw new AttendanceCooldownError(employee.id, times);
     }
+    const shift = await attendanceShift(tx, shiftId, employee.departmentId, now);
     const record = await tx.attendanceRecord.create({
       data: {
         employeeId: employee.id,
@@ -58,6 +61,7 @@ export async function registerAttendance(input: unknown, testNow?: Date) {
         registeredAt: now,
         status: "PRESENT",
         registrationMethod: "QR",
+        ...shift,
       },
     });
     await tx.employee.update({
@@ -70,6 +74,7 @@ export async function registerAttendance(input: unknown, testNow?: Date) {
       email: employee.normalizedEmail,
       date: businessDate(now),
       checkInAt: record.checkInAt,
+      shiftLabel: shiftHistoryLabel(shift),
       ...cooldownTimes(now, now),
     };
   });

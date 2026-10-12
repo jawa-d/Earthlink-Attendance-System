@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { securityEvent } from "@/lib/security-events";
 import { COOKIE, tokenHash } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { handle, sameOrigin } from "@/lib/http";
@@ -9,6 +10,7 @@ export async function POST(req: Request) {
     const token = jar.get(COOKIE)?.value;
     if (token) await db.session.deleteMany({ where: { id: tokenHash(token) } });
     jar.delete(COOKIE);
+    securityEvent("LOGOUT");
     return Response.json({ ok: true });
   });
 }

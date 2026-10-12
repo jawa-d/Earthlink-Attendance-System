@@ -1,3 +1,4 @@
+import { readJson } from "@/lib/request-body";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { departmentFields } from "@/lib/departments";
@@ -24,7 +25,7 @@ export async function PATCH(req: Request, ctx: Context) {
     const admin = await authorize(
       resource === "admins" || resource === "departments" ? "super" : "write",
     );
-    const body = await req.json();
+    const body = await readJson(req);
     const note = reason.parse(body.reason);
     return db.$transaction(async (tx) => {
       if (resource === "employees") {
@@ -103,6 +104,8 @@ export async function PATCH(req: Request, ctx: Context) {
         }
         if (old.deletedAt) throw new HttpError(409, "السجل محذوف");
         const data = attendanceSchema.parse(body);
+        if (data.shiftId !== undefined && data.shiftId !== (old.shiftId || null))
+          throw new HttpError(400, "لا يمكن تغيير الشفت التاريخي لسجل الحضور");
         const employee = await tx.employee.findUnique({
           where: { id: data.employeeId },
         });
@@ -191,7 +194,7 @@ export async function DELETE(req: Request, ctx: Context) {
     const admin = await authorize(
       resource === "departments" ? "super" : "write",
     );
-    const note = reason.parse((await req.json()).reason);
+    const note = reason.parse((await readJson(req)).reason);
     return db.$transaction(async (tx) => {
       if (resource === "departments") {
         // Never physically delete departments, including those linked to history.

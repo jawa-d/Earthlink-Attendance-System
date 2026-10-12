@@ -1,5 +1,7 @@
 import { businessDate } from "./validation";
 import { summarizeAttendanceDay } from "./attendance-summary";
+import { matchesShift } from "./shifts";
+import { shiftScheduleLabel, type ShiftHistory } from "./shift-display";
 export type Assignment = {
   teamLeaderId: string | null;
   leaderName: string | null;
@@ -19,13 +21,13 @@ export type ReportEmployee = {
   createdAt: Date;
   deletedAt: Date | null;
   assignments: Assignment[];
-  attendance: {
+  attendance: (ShiftHistory & {
     id: string;
     attendanceDate: Date;
     status: string;
     checkInAt: Date | null;
     registrationMethod: string;
-  }[];
+  })[];
 };
 export type LeaderGroup = {
   id: string;
@@ -39,6 +41,7 @@ export type LeaderGroup = {
   unknownEmployeeDays: number;
 };
 export type LeaderReportRow = {
+  shiftLabels?: string[];
   id: string;
   employee: {
     id: string;
@@ -69,7 +72,7 @@ export function buildLeaderReport(
   leaders: { id: string; fullName: string; departmentId: string }[],
   start: Date,
   end: Date,
-  filters: { department?: string; teamLeader?: string; status?: string } = {},
+  filters: { department?: string; teamLeader?: string; status?: string; shift?: string } = {},
 ) {
   const groups = new Map<string, LeaderGroup>();
   const distinct = new Map<string, Set<string>>();
@@ -101,6 +104,7 @@ export function buildLeaderReport(
   for (const employee of employees) {
     const recorded = new Map<string, ReportEmployee["attendance"]>();
     for (const record of employee.attendance) {
+      if (!matchesShift(record, filters.shift)) continue;
       const key = record.attendanceDate.toISOString().slice(0, 10);
       recorded.set(key, [...(recorded.get(key) || []), record]);
     }
@@ -114,6 +118,7 @@ export function buildLeaderReport(
       const assignment = assignmentOnDate(employee.assignments, date);
       const daily = summarizeAttendanceDay(recorded.get(day) || []);
       const record = daily.representative;
+      if (filters.shift && !record) continue;
       const departmentId = assignment?.departmentId || employee.departmentId;
       const teamLeaderId = assignment?.teamLeaderId || null;
       if (filters.department && departmentId !== filters.department) continue;
@@ -147,6 +152,7 @@ export function buildLeaderReport(
       }
       if (filters.status && status !== filters.status) continue;
       rows.push({
+        shiftLabels: [...new Set((recorded.get(day) || []).map(shiftScheduleLabel))],
         id: record?.id || `${employee.id}-${day}`,
         employee: {
           id: employee.id,

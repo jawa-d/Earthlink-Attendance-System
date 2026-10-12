@@ -1,8 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "./db";
-import { businessDate, dateValue } from "./validation";
+import { businessDate, dateValue, pageNumber } from "./validation";
 import { HttpError } from "./http";
+import { shiftFilter } from "./shifts";
 
 // Assignment intervals are [effectiveFrom, effectiveTo). Unknown history is
 // never attributed to the employee's current leader.
@@ -24,6 +25,7 @@ export function attendanceFilters(p: URLSearchParams) {
     ] } : {}),
   };
   const status = p.get("status") ? z.enum(["PRESENT", "LATE", "ABSENT", "EXCUSED", "UNREGISTERED"]).parse(p.get("status")) : undefined;
+  const shift = shiftFilter(p.get("shift"));
   const days: Date[] = [];
   for (let day = start; day <= end; day = new Date(day.getTime() + 86400000)) days.push(day);
   const assignment = (day: Date): Prisma.EmployeeAssignmentWhereInput => ({
@@ -33,6 +35,7 @@ export function attendanceFilters(p: URLSearchParams) {
     ...(departmentId ? { departmentId } : {}),
   });
   const where: Prisma.AttendanceRecordWhereInput = {
+    ...(shift ? { shiftId: shift === "none" ? null : shift } : {}),
     attendanceDate: { gte: start, lte: end },
     ...(p.get("deleted") === "true" ? {} : { deletedAt: null }),
     ...(status && status !== "UNREGISTERED" ? { status } : {}),
@@ -42,12 +45,12 @@ export function attendanceFilters(p: URLSearchParams) {
       employee: { assignments: { some: assignment(day) } },
     })) } : {}),
   };
-  return { where, employee, assignment, days, status, leader, departmentId };
+  return { where, employee, assignment, days, status, leader, departmentId, shift };
 }
 
 export async function getAttendanceList(p: URLSearchParams, exportAll = false) {
   const f = attendanceFilters(p);
-  const page = z.coerce.number().int().min(1).parse(p.get("page") || 1);
+  const page = pageNumber(p);
   const include = { employee: { include: { department: true, assignments: { orderBy: { effectiveFrom: "desc" as const } } } } };
   const annotate = (row: Prisma.AttendanceRecordGetPayload<{ include: typeof include }>) => {
     const { assignments, ...employee } = row.employee;
@@ -55,6 +58,8 @@ export async function getAttendanceList(p: URLSearchParams, exportAll = false) {
     return { ...row, employee: { ...employee, department: a ? { name: a.departmentName } : employee.department }, teamLeaderName: a ? a.leaderName || "بدون ليدر" : "غير معروف تاريخياً", historyUnknown: !a };
   };
   if (f.status === "UNREGISTERED") {
+    // No employee-to-shift roster exists. Never invent missing attendance.
+    if (f.shift && f.shift !== "none") return { rows: [], total: 0, page };
     const rows = [];
     for (const day of f.days) {
       const employees = await db.employee.findMany({
@@ -67,7 +72,8 @@ export async function getAttendanceList(p: URLSearchParams, exportAll = false) {
       });
       for (const e of employees) {
         const a = e.assignments[0];
-        rows.push({ id: `${e.id}-${day.toISOString()}`, employee: { ...e, department: { name: a.departmentName } }, attendanceDate: day, status: "UNREGISTERED", checkInAt: null, registrationMethod: null, teamLeaderName: a.leaderName || "بدون ليدر", historyUnknown: false });
+        rows.push({ id: `${e.id}-${day.toISOString()}`, employee: { ...e, department: { name: a.departmentName } }, attendanceDate: day, status: "UNREGISTERED", checkInAt: null, registrationMethod: null, teamLeaderName: a.leaderName || "بدون ليدر", historyUnknown: false,
+          shiftId: null, shiftCodeSnapshot: null, shiftNameSnapshot: null, shiftStartTimeSnapshot: null, shiftEndTimeSnapshot: null, shiftBusinessDate: null, shiftStartsAt: null, shiftEndsAt: null });
       }
     }
     return { rows: exportAll ? rows : rows.slice((page - 1) * 25, page * 25), total: rows.length, page };

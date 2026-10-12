@@ -3,6 +3,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { Role } from "@prisma/client";
 import { db } from "./db";
 import { HttpError } from "./http";
+import { securityEvent } from "./security-events";
 export const COOKIE = "earthlink_session";
 export function tokenHash(token: string) {
   const secret = process.env.AUTH_SECRET;
@@ -36,9 +37,14 @@ export async function currentSessionId() {
 }
 export async function authorize(access: keyof typeof permissions = "read") {
   const admin = await currentAdmin();
-  if (!admin) throw new HttpError(401, "يرجى تسجيل الدخول");
-  if (!permitted(admin.role, access))
+  if (!admin) {
+    securityEvent("AUTHORIZATION_DENIED");
+    throw new HttpError(401, "يرجى تسجيل الدخول");
+  }
+  if (!permitted(admin.role, access)) {
+    securityEvent("AUTHORIZATION_DENIED", admin.id);
     throw new HttpError(403, "ليست لديك صلاحية");
+  }
   return admin;
 }
 export async function createSession(adminId: string) {
@@ -67,6 +73,8 @@ export async function rateLimit(key: string, limit: number, minutes: number) {
     },
     update: { count: { increment: 1 } },
   });
-  if (row.count > limit)
+  if (row.count > limit) {
+    securityEvent("RATE_LIMIT_DENIED", key);
     throw new HttpError(429, "محاولات كثيرة، يرجى الانتظار");
+  }
 }

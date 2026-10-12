@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { reportOperatorFailure } from "./operator-error";
 import { hash } from "@node-rs/argon2";
 import { z } from "zod";
 import { db } from "../src/lib/db";
@@ -63,8 +64,5 @@ async function main() {
   );
 }
 main()
-  .catch((e) => {
-    console.error(e.message);
-    process.exitCode = 1;
-  })
+  .catch(reportOperatorFailure)
   .finally(() => db.$disconnect());

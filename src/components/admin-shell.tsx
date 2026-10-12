@@ -18,6 +18,7 @@ import {
   Menu,
   UserRound,
   Bell,
+  Clock3,
 } from "lucide-react";
 import { api } from "@/lib/client";
 import { ProjectCredits } from "./project-credits";
@@ -26,6 +27,7 @@ const links = [
   ["/admin/employees", "الموظفون", Users],
   ["/admin/departments", "الأقسام", Building2],
   ["/admin/team-leaders", "الليدرية", UserRoundCheck],
+  ["/admin/shifts", "الشفتات", Clock3],
   ["/admin/attendance", "سجل الحضور", CalendarCheck],
   ["/admin/reports", "التقارير والإحصائيات", ChartNoAxesCombined],
   ["/admin/qr", "رمز الحضور QR", QrCode],
@@ -53,9 +55,9 @@ export function AdminShell({
   return (
     <div className="min-h-screen">
       <aside
-        className={`no-print fixed inset-y-0 right-0 z-30 w-64 border-l border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900 ${menu ? "block" : "hidden"} lg:block`}
+        className={`no-print fixed inset-y-0 right-0 z-30 w-64 flex-col border-l border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900 ${menu ? "flex" : "hidden"} lg:flex`}
       >
-        <Link href="/admin" className="mb-10 flex items-center gap-3 px-2 pt-3">
+        <Link href="/admin" className="mb-10 flex shrink-0 items-center gap-3 px-2 pt-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#183153] text-white">
             <ChartNoAxesCombined size={24} />
           </div>
@@ -67,7 +69,7 @@ export function AdminShell({
           </div>
         </Link>
         <p className="muted mb-3 px-3 text-[10px]">القائمة الرئيسية</p>
-        <nav className="space-y-2">
+        <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto">
           {links
             .filter(
               ([url]) =>
@@ -87,7 +89,7 @@ export function AdminShell({
               </Link>
             ))}
         </nav>
-        <div className="absolute bottom-6 left-5 right-5 border-t border-slate-100 pt-5 dark:border-slate-700">
+        <div className="mt-5 shrink-0 border-t border-slate-100 pt-5 dark:border-slate-700">
           <Link href="/admin/profile" className="mb-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
               <UserRound size={20} />

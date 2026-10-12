@@ -1,3 +1,4 @@
+import { readJson, DELETION_BODY_LIMIT } from "@/lib/request-body";
 import { z } from "zod";
 import { authorize, currentSessionId } from "@/lib/auth";
 import { handle, sameOrigin } from "@/lib/http";
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
     sameOrigin(req);
     const actor = await authorize("super");
     const sessionId = await currentSessionId();
-    const input = command.parse(await req.json());
+    const input = command.parse(await readJson(req, DELETION_BODY_LIMIT));
     if (input.action === "export") {
       const { buffer, receipt } = await exportDeletionBackup(actor, sessionId, input.snapshotId);
       return new Response(new Uint8Array(buffer), { headers: {
@@ -37,7 +38,7 @@ export async function DELETE(req: Request) {
     sameOrigin(req);
     const actor = await authorize("super");
     const sessionId = await currentSessionId();
-    const input = z.object({ ...id, backupConfirmed: z.literal(true), receipt: z.string().regex(/^[a-f0-9]{64}$/), code, reason }).strict().parse(await req.json());
+    const input = z.object({ ...id, backupConfirmed: z.literal(true), receipt: z.string().regex(/^[a-f0-9]{64}$/), code, reason }).strict().parse(await readJson(req, DELETION_BODY_LIMIT));
     return Response.json(await permanentlyDeleteAttendance(actor, sessionId, input), { headers: { "Cache-Control": "private, no-store" } });
   });
 }

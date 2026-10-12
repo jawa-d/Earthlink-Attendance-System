@@ -13,6 +13,9 @@ const requiredTables = [
   "RateLimit",
   "TeamLeader",
   "EmployeeAssignment",
+  "AttendanceDeletionSnapshot",
+  "Shift",
+  "ShiftDepartment",
 ];
 function connection(key: "DATABASE_URL" | "DIRECT_URL") {
   const value = process.env[key];
@@ -57,11 +60,10 @@ async function main() {
   const direct = connection("DIRECT_URL");
   if (
     pooled.url.hostname.replace("-pooler.", ".") !== direct.url.hostname ||
-    pooled.url.pathname !== direct.url.pathname ||
-    pooled.url.username !== direct.url.username
+    pooled.url.pathname !== direct.url.pathname
   )
     throw new Error(
-      "The two URLs must select the same Neon endpoint, database and role. No connection attempted.",
+      "The two URLs must select the same Neon endpoint and database. Runtime and migration roles may differ. No connection attempted.",
     );
   for (const [label, value] of [
     ["Pooled", pooled.value],

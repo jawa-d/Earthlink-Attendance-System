@@ -57,6 +57,30 @@ model Department {
  employees Employee[]
  teamLeaders TeamLeader[]
  employeeAssignments EmployeeAssignment[]
+ shiftRestrictions ShiftDepartment[]
+}
+model Shift {
+ id String @id @default(uuid()) @db.Uuid
+ code String @unique @db.VarChar(20)
+ name String @db.VarChar(120)
+ startTime String @db.VarChar(5)
+ endTime String @db.VarChar(5)
+ isActive Boolean @default(true)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ departments ShiftDepartment[]
+ attendance AttendanceRecord[]
+ @@index([isActive, code])
+}
+// No restrictions means all departments. Explicit join avoids duplicating
+// employee/assignment ownership and preserves historical attendance separately.
+model ShiftDepartment {
+ shiftId String @db.Uuid
+ departmentId String @db.Uuid
+ shift Shift @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+ department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+ @@id([shiftId, departmentId])
+ @@index([departmentId, shiftId])
 }
 model Employee {
  id String @id @default(uuid()) @db.Uuid
@@ -117,6 +141,15 @@ model AttendanceRecord {
  checkInAt DateTime?
  originalCheckInAt DateTime?
  registeredAt DateTime?
+ shiftId String? @db.Uuid
+ shift Shift? @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+ shiftCodeSnapshot String? @db.VarChar(20)
+ shiftNameSnapshot String? @db.VarChar(120)
+ shiftStartTimeSnapshot String? @db.VarChar(5)
+ shiftEndTimeSnapshot String? @db.VarChar(5)
+ shiftBusinessDate DateTime? @db.Date
+ shiftStartsAt DateTime?
+ shiftEndsAt DateTime?
  status AttendanceStatus @default(PRESENT)
  registrationMethod RegistrationMethod
  createdByAdminId String? @db.Uuid
@@ -128,6 +161,7 @@ model AttendanceRecord {
  @@index([attendanceDate, status, deletedAt])
  @@index([employeeId, attendanceDate])
  @@index([employeeId, registeredAt])
+ @@index([shiftId, attendanceDate])
 }
 model AuditLog {
  id String @id @default(uuid()) @db.Uuid

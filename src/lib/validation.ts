@@ -1,6 +1,7 @@
 import { z } from "zod";
 export const corporateEmail = z
   .string()
+  .max(254)
   .trim()
   .toLowerCase()
   .pipe(z.email())
@@ -9,6 +10,9 @@ export const corporateEmail = z
     "يرجى إدخال بريد إلكتروني صحيح ينتهي بـ @earthlink.iq",
   );
 export const reason = z.string().trim().min(5).max(500);
+export function pageNumber(p: URLSearchParams) {
+  return z.coerce.number().int().min(1).max(1_000_000).parse(p.get("page") || 1);
+}
 export const employeeSchema = z.object({
   employeeNumber: z.string().trim().min(1).max(40),
   fullName: z.string().trim().min(2).max(120),
@@ -30,6 +34,7 @@ export const dateSchema = z
 export const attendanceSchema = z
   .object({
     employeeId: z.uuid(),
+    shiftId: z.uuid().nullable().optional(),
     attendanceDate: dateSchema,
     checkInAt: z.iso.datetime({ offset: true }).nullable().optional(),
     status: z.enum(["PRESENT", "LATE", "ABSENT", "EXCUSED"]),
